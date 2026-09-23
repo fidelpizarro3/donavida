@@ -1,0 +1,12 @@
+// Este archivo define: con qué base de datos hablamos (datasource),
+// y qué cliente de JS generar para usarla desde el código (generator).
+// Los modelos (las 20 tablas) los vamos a ir agregando acá abajo, de a módulos.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}

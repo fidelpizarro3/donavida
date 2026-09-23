@@ -1,0 +1,20 @@
+﻿# Dependencias instaladas (se reinstalan con npm install)
+node_modules/
+
+# Variables de entorno con secretos - cada uno tiene el suyo local
+.env
+.env.local
+
+# Builds
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
