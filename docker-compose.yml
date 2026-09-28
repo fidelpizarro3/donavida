@@ -1,3 +1,5 @@
+name: donavida
+
 services:
   db:
     image: postgres:16
@@ -7,7 +9,8 @@ services:
       POSTGRES_PASSWORD: donavida
       POSTGRES_DB: donavida
     ports:
-      - "5432:5432"
+      # 5433 afuera para no chocar con un Postgres instalado localmente (que suele usar 5432)
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
 

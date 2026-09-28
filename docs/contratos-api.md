@@ -1,0 +1,397 @@
+# Contratos de API entre dominios
+
+> **Estado:** los endpoints de autenticación están implementados. El resto son acuerdos para implementar,
+> basados en el DER y en [`api/prisma/schema.prisma`](../api/prisma/schema.prisma): el equipo tiene que validarlos
+> y asignar responsables.
+
+Este documento define **solo lo que un dominio consume de otro**, para que cada uno pueda avanzar en paralelo
+sabiendo qué va a recibir. Los endpoints que usa un único dominio no van acá.
+
+## 1. Dominios y responsables
+
+Los tres dominios agrupan las cinco áreas del DER:
+
+| Dominio | Áreas del DER | Tablas | Funcionalidades (N.º del Excel) | Responsable |
+|---|---|---|---|---|
+| **A. Cuentas y aptitud** | Identidad y acceso + Aptitud y normativa | `usuario`, `donante`, `institucion`, `usuario_institucion`, `suscripcion_push`, `pregunta`, `cuestionario_aptitud`, `respuesta_cuestionario`, `regla_elegibilidad`, `diferimiento`, `documento_normativa`, `consulta_asistente` | 1, 2, 3, 17, 18 | _a definir_ |
+| **B. Demanda y agenda** | Demanda y convocatoria + Agenda y donación | `necesidad`, `convocatoria`, `alerta`, `franja_horaria`, `turno`, `donacion` | 4, 8, 9, 10, 11, 14, 16 | _a definir_ |
+| **C. Inventario y red** | Inventario y red | `unidad_sangre`, `movimiento_unidad`, `transferencia`, `transferencia_item`, `stock_minimo` | 5, 6, 7, 12, 13, 15, 19 | _a definir_ |
+
+**A confirmar:** el DER ubica `stock_minimo` en Identidad y acceso; acá se asigna a C porque lo usan el panel de
+stock y la búsqueda de transferencias.
+
+Cada dominio es dueño de sus tablas: solo su código escribe en ellas. Para leer o modificar datos de otro dominio
+se usa el contrato correspondiente de este documento.
+
+## 2. Convenciones comunes
+
+- Todas las rutas empiezan con `/api` y reciben y devuelven JSON.
+- **Nombres de campos:** los del DER en camelCase, tal como los devuelve Prisma (`id_institucion` → `idInstitucion`,
+  `unidades_solicitadas` → `unidadesSolicitadas`). Los query params siguen la misma regla (`?idDonante=...`).
+  Los campos calculados que no existen en la base (`distanciaKm`, `unidadesFaltantes`) se aclaran en cada contrato.
+- **Ids:** `uuid` (texto).
+- **Grupo sanguíneo:** siempre en dos campos, `grupoSanguineo` y `factorRh`, como en el DER.
+- **Fechas:** con hora, ISO 8601 UTC (`2026-10-05T14:30:00.000Z`); solo fecha, `YYYY-MM-DD`; solo hora, `HH:MM`.
+  Prisma devuelve las columnas `date` y `time` como `Date` completos: hay que formatearlas antes de responder.
+- **Decimales** (latitud, longitud, distancias): como número. Prisma los devuelve como `Decimal`, que en JSON sale
+  como texto: convertirlos con `Number()` antes de responder.
+- **Contratos internos:** los marcados como _interno_ no tienen ruta HTTP; son funciones que el dominio dueño exporta
+  desde su servicio y el otro dominio llama directamente (el backend es uno solo). Se usan cuando el dato no debe
+  salir de la API (por ejemplo, las claves de las suscripciones push). Cualquier otro contrato también puede
+  consumirse llamando a la función del servicio en lugar de hacer el pedido HTTP, con la misma entrada y salida.
+
+### Autenticación
+
+- Header `Authorization: Bearer <token>` en todas las rutas protegidas.
+- El token lleva `{ sub: "<idUsuario>", rol: "<rol>" }` y dura 8 horas.
+- Middlewares compartidos en `api/src/middlewares/auth.js`: `autenticar` deja `req.usuario = { id, rol }`
+  (`id` es el `idUsuario`) y `autorizar(...roles)` restringe por rol.
+
+### Errores
+
+Todas las respuestas de error tienen la misma forma:
+
+```json
+{ "error": { "codigo": "SIN_PERMISO", "mensaje": "No tenés permiso para esta acción" } }
+```
+
+| Estado | `codigo` | Cuándo |
+|---|---|---|
+| 400 | `DATOS_INVALIDOS` | Faltan campos, tienen formato incorrecto o el JSON está mal formado |
+| 401 | `NO_AUTENTICADO` | Falta el token |
+| 401 | `TOKEN_INVALIDO` | El token es inválido o está vencido |
+| 401 | `CREDENCIALES_INVALIDAS` | Login con email o contraseña incorrectos |
+| 403 | `SIN_PERMISO` | El rol no tiene acceso |
+| 403 | `CUENTA_INACTIVA` | Login de un usuario con `activo = false` |
+| 404 | `NO_ENCONTRADO` | El recurso no existe |
+| 409 | `CONFLICTO` | El estado actual no permite la operación (email ya registrado, unidad ya reservada, etc.) |
+| 500 | `ERROR_INTERNO` | Error no previsto |
+
+### Valores de los enums
+
+Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
+
+| Campo | Valores |
+|---|---|
+| `rol` | `donante`, `institucion`, `admin` |
+| `grupoSanguineo` | `A`, `B`, `AB`, `O` |
+| `factorRh` | `positivo`, `negativo` |
+| `componente` | `sangre_entera`, `globulos_rojos`, `plaquetas` |
+| `sexo` (donante) | `femenino`, `masculino`, `x` |
+| `institucion.tipo` | `hospital`, `banco_de_sangre` |
+| `institucion.estado` | `pendiente`, `aprobada`, `rechazada`, `baja` |
+| `urgencia` | `urgente` (aviso al celular), `normal` (aviso por correo) |
+| `necesidad.estado` | `abierta`, `cubierta`, `cerrada_manual`, `vencida` |
+| `convocatoria.estado` | `propuesta`, `enviada`, `cerrada` |
+| `alerta.canal` | `push`, `email`, `whatsapp` |
+| `alerta.estado` | `pendiente`, `enviada`, `aceptada`, `rechazada`, `cancelada` |
+| `turno.estado` | `reservado`, `cancelado`, `asistio`, `ausente` |
+| `donacion.resultado` | `realizada`, `rechazada` |
+| `unidad_sangre.estado` | `disponible`, `reservada`, `usada`, `vencida`, `descartada` |
+| `transferencia.estado` | `pendiente`, `aceptada`, `rechazada`, `expirada`, `cancelada`, `recibida` |
+| `diferimiento.origen` | `cuestionario`, `donacion`, `institucion` |
+| `consulta_asistente.tipo` | `cuestionario`, `necesidad`, `requisitos` |
+
+## 3. Mapa de dependencias
+
+| Consume | Provee | Contrato | Para qué (func.) |
+|---|---|---|---|
+| Todos | A | `POST /api/auth/registro`, `POST /api/auth/login`, `GET /api/auth/me` | Sesión y rol ✅ implementado |
+| B, C | A | `GET /api/instituciones/:idInstitucion` | Datos, ubicación y estado de una institución |
+| C | A | `GET /api/instituciones?estado=aprobada` | Instituciones de la red con su ubicación (12) |
+| B | A | `GET /api/donantes/elegibles` | Candidatos para la convocatoria (8) |
+| B | A | `GET /api/donantes/:idDonante/habilitacion` | Validar antes de reservar un turno (10) |
+| B | A | _interno_ `obtenerContactoDonante(idDonante)` | Canales y suscripciones push para enviar la alerta (9) |
+| B | A | _interno_ `registrarAlertaEnviada(idDonante)` | Contar la alerta para el tope mensual (9) |
+| B | A | `POST /api/donantes/:idDonante/donacion-registrada` | Reiniciar el período de espera y completar el grupo (11) |
+| B | A | `POST /api/donantes/:idDonante/diferimientos` | Marcar a una persona como no apta (3, 11) |
+| B | A | `POST /api/asistente/consultas` | Interpretar una necesidad escrita en lenguaje natural (16) |
+| A | B | `GET /api/donaciones?idDonante=` | Historial y cantidad de donaciones para el carné (18) |
+| A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
+| C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
+| C | B | `PATCH /api/necesidades/:idNecesidad/cobertura` | Sumar lo cubierto por una transferencia (13, 14) |
+| C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
+| B | C | `GET /api/inventario/disponibilidad-red` | Buscar unidades en la red antes de convocar (12) |
+| B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) |
+| B | C | `POST /api/unidades` | Cargar la unidad que genera una donación (5, 11) |
+
+## 4. Detalle de cada contrato
+
+### Dominio A — Cuentas y aptitud
+
+#### `POST /api/auth/registro` ✅ implementado
+
+- **Rol:** público. Solo se puede registrar como `donante` o `institucion`; los admin se crean con `npm run crear-admin`.
+- **Body:** `{ "email": "ana@mail.com", "password": "entre 8 y 72 caracteres", "nombre": "Ana", "apellido": "Paz", "rol": "donante" }`
+- **201:** `{ "idUsuario": "<uuid>", "email": "ana@mail.com", "nombre": "Ana", "apellido": "Paz", "rol": "donante" }`
+- **Errores:** 400 `DATOS_INVALIDOS`, 409 `CONFLICTO` (email ya registrado).
+- Crea solo el `usuario`: el perfil de donante (func. 2) y el alta de la institución (func. 1) son pasos aparte.
+
+#### `POST /api/auth/login` ✅ implementado
+
+- **Rol:** público.
+- **Body:** `{ "email": "ana@mail.com", "password": "..." }`
+- **200:** `{ "token": "eyJ...", "usuario": { "idUsuario": "<uuid>", "email": "ana@mail.com", "nombre": "Ana", "apellido": "Paz", "rol": "donante" } }`
+- **Errores:** 401 `CREDENCIALES_INVALIDAS` (mismo mensaje si falla el email o la contraseña), 403 `CUENTA_INACTIVA`.
+
+#### `GET /api/auth/me` ✅ implementado
+
+- **Rol:** cualquier usuario autenticado.
+- **200:** el mismo objeto `usuario` que devuelve el login.
+- **Errores:** 401 `NO_AUTENTICADO` / `TOKEN_INVALIDO`, 404 `NO_ENCONTRADO`.
+
+#### `GET /api/instituciones/:idInstitucion`
+
+- **Rol:** cualquier usuario autenticado.
+- **200:**
+  ```json
+  {
+    "idInstitucion": "<uuid>",
+    "nombre": "Hospital Central",
+    "direccion": "Av. Argentina 1200, Neuquén",
+    "tipo": "hospital",
+    "estado": "aprobada",
+    "latitud": -38.9516,
+    "longitud": -68.0591,
+    "intervaloDonacionDias": 56
+  }
+  ```
+- **Errores:** 404 `NO_ENCONTRADO`.
+- No incluye `documentacionUrl` ni `motivoRechazo`: son datos internos de la verificación.
+
+#### `GET /api/instituciones?estado=aprobada`
+
+- **Rol:** `institucion`, `admin`.
+- **200:** lista de objetos con la misma forma que `GET /api/instituciones/:idInstitucion`.
+- C no debe proponer ni aceptar transferencias con instituciones que no estén `aprobada` (una institución dada de
+  baja deja de recibir pedidos, func. 1).
+
+#### `GET /api/donantes/elegibles`
+
+- **Rol:** `institucion`.
+- **Query:** `grupoSanguineo`, `factorRh`, `componente` (lo que necesita el paciente), `idInstitucion`, `radioKm`.
+- **Qué resuelve A:** grupo compatible, `aptoDesde` vencido o nulo sin diferimientos vigentes, alertas no pausadas
+  (`alertasPausadasHasta`), sin llegar al tope mensual (`alertasMesActual < topeAlertasMes`) y dentro del radio.
+- **200:**
+  ```json
+  [
+    {
+      "idDonante": "<uuid>",
+      "nombre": "Ana",
+      "apellido": "Paz",
+      "grupoSanguineo": "O",
+      "factorRh": "negativo",
+      "distanciaKm": 4.2,
+      "motivo": "Grupo compatible (O negativo dona a todos) y habilitada desde 2026-08-01"
+    }
+  ]
+  ```
+  `distanciaKm` y `motivo` son calculados. El `motivo` es el que ve el donante en la alerta (func. 9).
+- El orden, el recorte por cupo de agenda y la confirmación del hospital los resuelve B (func. 8).
+
+#### `GET /api/donantes/:idDonante/habilitacion`
+
+- **Rol:** `institucion`, o el propio `donante`.
+- **200:** `{ "habilitado": false, "aptoDesde": "2026-11-20", "motivo": "Donó el 2026-09-25 (56 días entre donaciones)" }`
+- **Errores:** 404 `NO_ENCONTRADO`.
+
+#### _interno_ `obtenerContactoDonante(idDonante)`
+
+- **Devuelve:**
+  ```js
+  {
+    email: 'ana@mail.com',
+    avisoPush: true, avisoEmail: true, avisoWhatsapp: false,
+    contactoHoraDesde: '09:00', contactoHoraHasta: '20:00',
+    suscripcionesPush: [{ endpoint: '...', p256dh: '...', auth: '...' }] // solo las activas
+  }
+  ```
+- Es interno porque las claves de `suscripcion_push` no deben salir de la API.
+
+#### _interno_ `registrarAlertaEnviada(idDonante)`
+
+- Suma 1 a `donante.alertasMesActual`. B la llama cada vez que envía una alerta.
+- **Devuelve:** `{ alertasMesActual: 3, topeAlertasMes: 4 }`
+
+#### `POST /api/donantes/:idDonante/donacion-registrada`
+
+- **Rol:** `institucion`.
+- **Body:** `{ "idDonacion": "<uuid>", "fecha": "2026-09-25", "grupoSanguineo": "O", "factorRh": "negativo" }`
+  (`grupoSanguineo` y `factorRh` son los confirmados; A solo los guarda si el donante no los tenía, func. 11).
+- **Qué hace A:** crea el `diferimiento` con origen `donacion` según `intervaloDonacionDias` y actualiza `aptoDesde`.
+- **200:** `{ "aptoDesde": "2026-11-20" }`
+
+#### `POST /api/donantes/:idDonante/diferimientos`
+
+- **Rol:** `institucion`.
+- **Body:** `{ "motivo": "Hemoglobina baja en el control previo", "desde": "2026-10-01", "hasta": "2026-11-01" }`
+  (`hasta` es opcional: sin fecha, el diferimiento no tiene fin).
+- **Qué hace A:** crea el `diferimiento` con origen `institucion` y recalcula `aptoDesde`.
+- **201:** `{ "idDiferimiento": "<uuid>", "aptoDesde": "2026-11-01" }`
+
+#### `POST /api/asistente/consultas`
+
+- **Rol:** `institucion` para `tipo: "necesidad"`.
+- **Body:** `{ "tipo": "necesidad", "textoIngresado": "necesito seis unidades de O negativo para mañana a la mañana" }`
+- **201:**
+  ```json
+  {
+    "idConsultaAsistente": "<uuid>",
+    "interpretacion": {
+      "grupoSanguineo": "O",
+      "factorRh": "negativo",
+      "componente": null,
+      "unidadesSolicitadas": 6,
+      "urgencia": "urgente",
+      "fechaLimite": "2026-10-06"
+    },
+    "datosFaltantes": ["componente"]
+  }
+  ```
+  Si falta un dato o es ambiguo queda en `null` y aparece en `datosFaltantes`: B lo pregunta en vez de completarlo (func. 16).
+- Cuando el hospital confirma y B publica la necesidad, B llama a
+  `PATCH /api/asistente/consultas/:idConsultaAsistente` con `{ "confirmadoPorUsuario": true }`.
+
+### Dominio B — Demanda y agenda
+
+#### `GET /api/donaciones?idDonante=`
+
+- **Rol:** `institucion`, o el propio `donante`.
+- **200:**
+  ```json
+  [
+    { "idDonacion": "<uuid>", "fecha": "2026-09-25", "resultado": "realizada", "idInstitucion": "<uuid>", "nombreInstitucion": "Hospital Central" }
+  ]
+  ```
+  `nombreInstitucion` es calculado. Ordenado de la más reciente a la más antigua.
+
+#### `GET /api/turnos/proximo?idDonante=`
+
+- **Rol:** `institucion`, o el propio `donante`.
+- **200:**
+  ```json
+  {
+    "idTurno": "<uuid>",
+    "estado": "reservado",
+    "codigoQr": "<código>",
+    "fecha": "2026-10-06",
+    "horaInicio": "08:00",
+    "horaFin": "08:30",
+    "idInstitucion": "<uuid>"
+  }
+  ```
+  `fecha`, `horaInicio`, `horaFin` e `idInstitucion` salen de la `franja_horaria` del turno. Si no tiene turno, responde `null`.
+
+#### `GET /api/necesidades`
+
+- **Rol:** `institucion`, `admin`.
+- **Query:** `idInstitucion` (opcional para `admin`), `estado` (ej.: `abierta`).
+- **200:**
+  ```json
+  [
+    {
+      "idNecesidad": "<uuid>",
+      "idInstitucion": "<uuid>",
+      "grupoSanguineo": "O",
+      "factorRh": "negativo",
+      "componente": "globulos_rojos",
+      "unidadesSolicitadas": 6,
+      "unidadesCubiertas": 2,
+      "unidadesFaltantes": 4,
+      "urgencia": "urgente",
+      "fechaLimite": "2026-10-06",
+      "estado": "abierta",
+      "creadaEn": "2026-10-05T09:12:00.000Z",
+      "cerradaEn": null
+    }
+  ]
+  ```
+  `unidadesFaltantes` es calculado (`unidadesSolicitadas - unidadesCubiertas`).
+
+#### `PATCH /api/necesidades/:idNecesidad/cobertura`
+
+- **Rol:** `institucion`.
+- **Body:** `{ "unidades": 4, "idTransferencia": "<uuid>" }`
+- **Qué hace B:** suma `unidades` a `unidadesCubiertas`. Si no queda nada por cubrir, pasa la necesidad a `cubierta`,
+  completa `cerradaEn` y dispara el aviso de cierre a los donantes (func. 14).
+- **200:** la necesidad actualizada, con la misma forma que en `GET /api/necesidades`.
+- **Errores:** 409 `CONFLICTO` si la necesidad ya no está `abierta`.
+
+#### `GET /api/estadisticas/convocatorias`
+
+- **Rol:** `institucion`, `admin`.
+- **Query:** `idInstitucion` (opcional para `admin`), `desde`, `hasta`, `grupoSanguineo` y `factorRh` (opcionales).
+- **200:**
+  ```json
+  {
+    "necesidadesPublicadas": 20,
+    "necesidadesCubiertas": 17,
+    "horasPromedioHastaCubrir": 30.5,
+    "cubiertasPorDonantes": 11,
+    "cubiertasPorTransferencia": 4,
+    "cubiertasPorAmbas": 2,
+    "donantesConvocados": 140,
+    "donantesQueRespondieron": 52
+  }
+  ```
+
+### Dominio C — Inventario y red
+
+#### `GET /api/inventario/disponibilidad-red`
+
+- **Rol:** `institucion`.
+- **Query:** `grupoSanguineo`, `factorRh`, `componente`, `cantidad`, `idInstitucion` (la que pide).
+- **Qué resuelve C:** solo unidades `disponible` de instituciones `aprobada` (distintas de la que pide) que, después de
+  prestar, sigan por encima de su `stock_minimo`.
+- **200** (ordenado por distancia y por días que le quedan a cada unidad):
+  ```json
+  [
+    {
+      "idInstitucion": "<uuid>",
+      "nombre": "Banco de Sangre Regional",
+      "distanciaKm": 6.1,
+      "unidades": [{ "idUnidadSangre": "<uuid>", "codigo": "U-000210", "fechaVencimiento": "2026-10-03", "diasRestantes": 5 }]
+    }
+  ]
+  ```
+  `nombre`, `distanciaKm` y `diasRestantes` son calculados.
+- **200 con `[]`** si no hay cobertura en la red: B convoca donantes por todo lo que falta.
+
+#### `POST /api/transferencias`
+
+- **Rol:** `institucion` (la solicitante).
+- **Body:** `{ "idInstitucionProveedora": "<uuid>", "idNecesidad": "<uuid>", "idsUnidadSangre": ["<uuid>", "<uuid>"] }`
+  (`idNecesidad` es opcional: una transferencia se puede iniciar sin necesidad publicada, func. 13).
+  La institución solicitante sale del usuario autenticado.
+- **Qué hace C:** crea la `transferencia`, un `transferencia_item` por unidad y pasa las unidades a `reservada`,
+  todo en una transacción.
+- **201:** `{ "idTransferencia": "<uuid>", "estado": "pendiente", "plazoRespuesta": "2026-10-05T18:00:00.000Z" }`
+- **Errores:** 409 `CONFLICTO` si alguna unidad ya no está `disponible`.
+- Cuando se confirma la recepción, C llama a `PATCH /api/necesidades/:idNecesidad/cobertura`. Si la institución que
+  presta no responde antes de `plazoRespuesta`, la transferencia pasa a `expirada`, las unidades vuelven a
+  `disponible` y B convoca donantes.
+
+#### `POST /api/unidades`
+
+- **Rol:** `institucion`.
+- **Body:**
+  ```json
+  {
+    "idInstitucion": "<uuid>",
+    "idDonacion": "<uuid>",
+    "grupoSanguineo": "O",
+    "factorRh": "negativo",
+    "componente": "globulos_rojos",
+    "fechaExtraccion": "2026-09-25"
+  }
+  ```
+  `idDonacion` es opcional: se completa cuando la unidad sale de una donación registrada en el sistema.
+  `codigo` también es opcional: si no viene, C lo genera.
+- **Qué hace C:** calcula `fechaVencimiento` según el componente y registra el `movimiento_unidad` de tipo `ingreso`.
+- **201:** `{ "idUnidadSangre": "<uuid>", "codigo": "U-000212", "fechaVencimiento": "2026-11-06", "estado": "disponible" }`
+
+## 5. Cómo se cambia un contrato
+
+- Agregar un campo nuevo a una respuesta no rompe a nadie: se puede hacer avisando.
+- Quitar o renombrar un campo, o cambiar su tipo, se acuerda antes con quien consume el contrato.
+- Todo cambio se hace por pull request, actualizando este documento en el mismo PR.
