@@ -49,6 +49,13 @@ function generarTokenVerificacion(idUsuario) {
   );
 }
 
+// Solo para desarrollo: con VERIFICACION_SIN_CORREO=true no se manda el correo y el token de activación
+// viaja en la respuesta, así el front muestra la activación apenas termina el registro.
+// Nunca en producción: cualquiera podría activar una cuenta con un email ajeno.
+function verificacionSinCorreo() {
+  return process.env.VERIFICACION_SIN_CORREO === 'true' && process.env.NODE_ENV !== 'production';
+}
+
 // Criterio 4: el enlace de activación llega solo por correo (el token nunca viaja en una respuesta).
 // Si el envío falla la cuenta ya existe, y se puede pedir otro enlace con /reenviar-verificacion.
 async function enviarEnlaceVerificacion(usuario) {
@@ -169,6 +176,14 @@ router.post('/registro', async (req, res) => {
       return usuario;
     });
 
+    if (verificacionSinCorreo()) {
+      return res.status(201).json({
+        ...datosPublicos(usuarioCreado),
+        tokenVerificacion: generarTokenVerificacion(usuarioCreado.idUsuario),
+        mensaje: 'Registro exitoso. Activá tu cuenta para poder iniciar sesión.',
+      });
+    }
+
     const correoEnviado = await enviarEnlaceVerificacion(usuarioCreado);
 
     res.status(201).json({
@@ -245,6 +260,13 @@ router.post('/reenviar-verificacion', async (req, res) => {
 
   const usuario = await prisma.usuario.findUnique({ where: { email: email.trim().toLowerCase() } });
   if (usuario && !usuario.emailVerificado) {
+    if (verificacionSinCorreo()) {
+      return res.json({
+        ok: true,
+        mensaje: 'Tu cuenta está lista para activarse.',
+        tokenVerificacion: generarTokenVerificacion(usuario.idUsuario),
+      });
+    }
     await enviarEnlaceVerificacion(usuario);
   }
 
