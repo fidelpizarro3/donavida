@@ -8,6 +8,9 @@ function autenticar(req, res, next) {
   }
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!payload.rol || payload.proposito) {
+      return res.status(401).json({ error: { codigo: 'TOKEN_INVALIDO', mensaje: 'Token inválido o de tipo incorrecto' } });
+    }
     req.usuario = { id: payload.sub, rol: payload.rol }; // id_usuario es un uuid (string)
     next();
   } catch {

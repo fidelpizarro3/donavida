@@ -61,6 +61,7 @@ Todas las respuestas de error tienen la misma forma:
 | 401 | `NO_AUTENTICADO` | Falta el token |
 | 401 | `TOKEN_INVALIDO` | El token es inválido o está vencido |
 | 401 | `CREDENCIALES_INVALIDAS` | Login con email o contraseña incorrectos |
+| 403 | `EMAIL_NO_VERIFICADO` | Login de un usuario con `email_verificado = false` (requiere validación previa) |
 | 403 | `SIN_PERMISO` | El rol no tiene acceso |
 | 403 | `CUENTA_INACTIVA` | Login de un usuario con `activo = false` |
 | 404 | `NO_ENCONTRADO` | El recurso no existe |
@@ -122,23 +123,98 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 #### `POST /api/auth/registro` ✅ implementado
 
 - **Rol:** público. Solo se puede registrar como `donante` o `institucion`; los admin se crean con `npm run crear-admin`.
-- **Body:** `{ "email": "ana@mail.com", "password": "entre 8 y 72 caracteres", "nombre": "Ana", "apellido": "Paz", "rol": "donante" }`
-- **201:** `{ "idUsuario": "<uuid>", "email": "ana@mail.com", "nombre": "Ana", "apellido": "Paz", "rol": "donante" }`
-- **Errores:** 400 `DATOS_INVALIDOS`, 409 `CONFLICTO` (email ya registrado).
-- Crea solo el `usuario`: el perfil de donante (func. 2) y el alta de la institución (func. 1) son pasos aparte.
+- **Body para rol `donante` (TAREA-2):**
+  ```json
+  {
+    "email": "ana@mail.com",
+    "password": "entre 8 y 72 caracteres",
+    "nombre": "Ana",
+    "apellido": "Paz",
+    "rol": "donante",
+    "documento": "35123456",
+    "fechaNacimiento": "1995-04-10",
+    "sexo": "femenino",
+    "grupoSanguineo": "O",
+    "factorRh": "positivo",
+    "contactoHoraDesde": "09:00",
+    "contactoHoraHasta": "18:00"
+  }
+  ```
+  - `documento`, `fechaNacimiento` (edad mínima 16 años) y `sexo` son obligatorios para donantes. El documento se normaliza automáticamente eliminando puntos y guiones.
+  - `grupoSanguineo` y `factorRh` son opcionales: si se desconoce el grupo, ambos se omiten o envían como `null` (se completan en la 1ra donación). Si se informa uno, deben enviarse ambos.
+  - `contactoHoraDesde` y `contactoHoraHasta` son opcionales: si se informan, deben enviarse ambos en formato `HH:MM` con `desde < hasta`.
+- **Body para rol `institucion`:** `{ "email": "...", "password": "...", "nombre": "...", "apellido": "...", "rol": "institucion" }`.
+- **201:** `{ "idUsuario": "<uuid>", "email": "ana@mail.com", "nombre": "Ana", "apellido": "Paz", "rol": "donante", "emailVerificado": false, "mensaje": "..." }`
+- Envía un correo con el enlace de activación `APP_URL/?token=<token>` (vence en 24 horas). El token **nunca** viaja en
+  la respuesta. Si el correo no se pudo enviar, el registro igual se completa y `mensaje` indica que se pida un enlace nuevo.
+- **Errores:** 400 `DATOS_INVALIDOS`, 409 `CONFLICTO` (email o documento ya registrado).
+
+#### `POST /api/auth/verificar-email` ✅ implementado
+
+- **Rol:** público. Lo llama el front cuando se abre el enlace del correo.
+- **Body:** `{ "token": "<token del enlace>" }` (también acepta `?token=...` por query param).
+- **200:** `{ "ok": true, "mensaje": "Correo verificado exitosamente. Tu cuenta está activa.", "usuario": { ... } }`
+- **Errores:** 400 `DATOS_INVALIDOS`, 400 `TOKEN_INVALIDO` (token vencido, corrupto o ajeno a verificación de email), 404 `NO_ENCONTRADO`.
+
+#### `POST /api/auth/reenviar-verificacion` ✅ implementado
+
+- **Rol:** público. Para cuando el enlace venció o el correo no llegó.
+- **Body:** `{ "email": "ana@mail.com" }`
+- **200:** `{ "ok": true, "mensaje": "..." }`. Responde lo mismo exista o no la cuenta (no revela qué emails están
+  registrados); solo envía un correo si la cuenta existe y todavía no está verificada.
+- **Errores:** 400 `DATOS_INVALIDOS`.
 
 #### `POST /api/auth/login` ✅ implementado
 
 - **Rol:** público.
 - **Body:** `{ "email": "ana@mail.com", "password": "..." }`
 - **200:** `{ "token": "eyJ...", "usuario": { "idUsuario": "<uuid>", "email": "ana@mail.com", "nombre": "Ana", "apellido": "Paz", "rol": "donante" } }`
-- **Errores:** 401 `CREDENCIALES_INVALIDAS` (mismo mensaje si falla el email o la contraseña), 403 `CUENTA_INACTIVA`.
+- **Errores:** 401 `CREDENCIALES_INVALIDAS` (mismo mensaje si falla email o contraseña), 403 `EMAIL_NO_VERIFICADO` (si aún no validó su correo), 403 `CUENTA_INACTIVA`.
 
 #### `GET /api/auth/me` ✅ implementado
 
 - **Rol:** cualquier usuario autenticado.
 - **200:** el mismo objeto `usuario` que devuelve el login.
 - **Errores:** 401 `NO_AUTENTICADO` / `TOKEN_INVALIDO`, 404 `NO_ENCONTRADO`.
+
+#### `GET /api/donantes/perfil` ✅ implementado
+
+- **Rol:** `donante` autenticado.
+- **200:**
+  ```json
+  {
+    "idDonante": "<uuid>",
+    "idUsuario": "<uuid>",
+    "nombre": "Ana",
+    "apellido": "Paz",
+    "email": "ana@mail.com",
+    "documento": "35123456",
+    "fechaNacimiento": "1995-04-10",
+    "sexo": "femenino",
+    "grupoSanguineo": "O",
+    "factorRh": "positivo",
+    "contactoHoraDesde": "09:00",
+    "contactoHoraHasta": "18:00",
+    "alertasPausadasHasta": null
+  }
+  ```
+- **Errores:** 401 `NO_AUTENTICADO`, 403 `SIN_PERMISO`, 404 `NO_ENCONTRADO`.
+
+#### `PATCH /api/donantes/perfil` ✅ implementado
+
+- **Rol:** `donante` autenticado.
+- **Body (campos opcionales):**
+  ```json
+  {
+    "contactoHoraDesde": "14:00",
+    "contactoHoraHasta": "20:00",
+    "alertasPausadasHasta": "2026-11-15"
+  }
+  ```
+  - `contactoHoraDesde` y `contactoHoraHasta`: formato `"HH:MM"`. Si se envían, deben indicarse ambos con `desde < hasta`, o ambos en `null` para desconfigurar.
+  - `alertasPausadasHasta`: fecha `"YYYY-MM-DD"` presente o futura para pausar alertas, o `null` para reanudarlas de inmediato.
+- **200:** el perfil actualizado con la misma estructura que en `GET /api/donantes/perfil`.
+- **Errores:** 400 `DATOS_INVALIDOS`, 401 `NO_AUTENTICADO`, 403 `SIN_PERMISO`, 404 `NO_ENCONTRADO`.
 
 #### `GET /api/instituciones/:idInstitucion`
 
