@@ -14,5 +14,14 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  # Servidor de correo de desarrollo: recibe los emails que manda la API (SMTP en 1025)
+  # sin enviarlos a nadie, y los muestra en http://localhost:8025
+  mail:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   db_data:

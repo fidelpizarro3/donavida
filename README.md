@@ -32,6 +32,9 @@ docker compose up -d
 Levanta PostgreSQL 16 en `localhost:5433` (usuario, contraseña y base: `donavida`).
 Se usa el puerto **5433** y no el 5432 para no chocar con un PostgreSQL instalado en la máquina.
 
+También levanta **Mailpit**, un servidor de correo de desarrollo: recibe los emails que manda la API (por ejemplo,
+el enlace para activar la cuenta) sin enviarlos a nadie. Se leen en http://localhost:8025.
+
 **2. Backend**
 
 ```bash
@@ -68,7 +71,7 @@ El `.env` del front es opcional: si no existe, usa `http://localhost:3000` como 
 
 | Dónde | Comando | Qué hace |
 |---|---|---|
-| raíz | `docker compose up -d` | Levanta la base |
+| raíz | `docker compose up -d` | Levanta la base y Mailpit (correos en http://localhost:8025) |
 | raíz | `docker compose stop` | Apaga la base (los datos se conservan) |
 | raíz | `docker compose down -v` | Borra la base **y todos sus datos** |
 | `api/` | `npm run dev` | API con recarga automática al guardar |
@@ -77,7 +80,22 @@ El `.env` del front es opcional: si no existe, usa `http://localhost:3000` como 
 | `api/` | `npm run db:studio` | Abre Prisma Studio para ver y editar los datos |
 | `web/` | `npm run dev` | Front en modo desarrollo |
 | `web/` | `npm run build` | Build de producción en `web/dist` |
+| `api/` | `npm test` | Tests de la API (Jest + Supertest) |
 | `web/` | `npm run lint` | Linter (oxlint) |
+
+## Después de un `git pull`
+
+Cuando traés cambios de un compañero puede haber dependencias, servicios o tablas nuevas. Según qué archivos cambiaron:
+
+| Si cambió... | Corré | Por qué |
+|---|---|---|
+| `api/package.json` | `cd api` y `npm install` | Instala las dependencias nuevas de la API. Sin esto, `npm run dev` falla con `Cannot find module '...'` |
+| `web/package.json` | `cd web` y `npm install` | Lo mismo para el front |
+| `docker-compose.yml` | `docker compose up -d` (desde la raíz) | Levanta los servicios nuevos (por ejemplo, Mailpit) sin tocar los datos de la base |
+| `api/prisma/migrations/` | `cd api` y `npm run db:migrate` | Crea o modifica las tablas en tu base local |
+
+Si no sabés qué cambió, corré los cuatro: no rompen nada si no hay novedades. `npm install` solo instala lo que falta,
+y no hace falta borrar `node_modules`.
 
 ## Base de datos y migraciones
 
@@ -100,9 +118,15 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 
 | Endpoint | Qué hace |
 |---|---|
-| `POST /api/auth/registro` | Crea un usuario. Body: `{ email, password, nombre, apellido, rol }`, con `rol` = `donante` o `institucion` |
-| `POST /api/auth/login` | Body: `{ email, password }`. Devuelve `{ token, usuario }`; el token dura 8 horas |
+| `POST /api/auth/registro` | Crea un usuario. Body: `{ email, password, nombre, apellido, rol }`, con `rol` = `donante` o `institucion`. Un donante además manda `documento`, `fechaNacimiento` y `sexo` (y opcionalmente grupo, factor y horario de contacto): ver [`docs/contratos-api.md`](docs/contratos-api.md) |
+| `POST /api/auth/verificar-email` | Activa la cuenta con el token del enlace que llega por correo |
+| `POST /api/auth/reenviar-verificacion` | Manda un enlace de activación nuevo |
+| `POST /api/auth/login` | Body: `{ email, password }`. Devuelve `{ token, usuario }`; el token dura 8 horas. Hasta verificar el correo responde 403 `EMAIL_NO_VERIFICADO` |
 | `GET /api/auth/me` | Devuelve el usuario del token |
+| `GET` / `PATCH /api/donantes/perfil` | Perfil del donante: horario de contacto preferido y pausa de alertas |
+
+Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
+El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.
 
 El rol `admin` no se puede registrar por la API. Para crear uno, desde `api/`:
 
