@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
-export function Login({ onLoginExitoso, onIrARegistro, onIrAVerificar, apiUrl }) {
-  const [email, setEmail] = useState('')
+export function Login({ emailInicial = '', onLoginExitoso, onIrARegistro, onIrAVerificar, apiUrl }) {
+  const [email, setEmail] = useState(emailInicial)
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [codigoError, setCodigoError] = useState(null)
