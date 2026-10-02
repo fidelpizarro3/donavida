@@ -2,17 +2,19 @@
   "name": "api",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "crear-admin": "node scripts/crear-admin.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "prisma": {
-    "schema": "../prisma/schema.prisma"
-  },
   "dependencies": {
     "@prisma/client": "6.19.3",
     "bcrypt": "^6.0.0",

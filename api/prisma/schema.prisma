@@ -1,0 +1,642 @@
+// Modelo de datos de DonaVida, traducido del DER (DonaVida_DER_BN_corregido.pdf).
+//
+// - Las tablas y columnas se llaman igual que en el DER (snake_case, vía @@map / @map);
+//   desde el código se usan en camelCase: prisma.unidadSangre.findMany({ where: { grupoSanguineo: 'O' } })
+// - Los cambios respecto del DER están marcados con "CORRECCIÓN".
+// - Prisma no puede expresar un CHECK ni índices únicos parciales: están agregados a mano
+//   al final de api/prisma/migrations/<fecha>_init/migration.sql.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Identidad y acceso ──────────────────────────────────────────────────────
+
+model Usuario {
+  idUsuario       String   @id @default(uuid()) @map("id_usuario") @db.Uuid
+  email           String   @unique @db.VarChar(255)
+  passwordHash    String   @map("password_hash") @db.VarChar(255)
+  nombre          String   @db.VarChar(100)
+  apellido        String   @db.VarChar(100)
+  rol             Rol
+  emailVerificado Boolean  @default(false) @map("email_verificado")
+  activo          Boolean  @default(true)
+  creadoEn        DateTime @default(now()) @map("creado_en")
+
+  donante                  Donante?
+  instituciones            UsuarioInstitucion[]
+  institucionesAprobadas   Institucion[]
+  suscripcionesPush        SuscripcionPush[]
+  consultasAsistente       ConsultaAsistente[]
+  convocatoriasConfirmadas Convocatoria[]
+  movimientosUnidad        MovimientoUnidad[]
+
+  @@map("usuario")
+}
+
+model Donante {
+  idDonante            String          @id @default(uuid()) @map("id_donante") @db.Uuid
+  idUsuario            String          @unique @map("id_usuario") @db.Uuid
+  documento            String          @unique @db.VarChar(20)
+  fechaNacimiento      DateTime        @map("fecha_nacimiento") @db.Date
+  sexo                 Sexo
+  grupoSanguineo       GrupoSanguineo? @map("grupo_sanguineo") // null si no lo conoce (func. 2)
+  factorRh             FactorRh?       @map("factor_rh")
+  latitud              Decimal?        @db.Decimal(9, 6)
+  longitud             Decimal?        @db.Decimal(9, 6)
+  contactoHoraDesde    DateTime?       @map("contacto_hora_desde") @db.Time(0)
+  contactoHoraHasta    DateTime?       @map("contacto_hora_hasta") @db.Time(0)
+  avisoPush            Boolean         @default(true) @map("aviso_push")
+  avisoEmail           Boolean         @default(true) @map("aviso_email")
+  avisoWhatsapp        Boolean         @default(false) @map("aviso_whatsapp")
+  topeAlertasMes       Int             @default(4) @map("tope_alertas_mes")
+  alertasPausadasHasta DateTime?       @map("alertas_pausadas_hasta") @db.Date
+  aptoDesde            DateTime?       @map("apto_desde") @db.Date
+  alertasMesActual     Int             @default(0) @map("alertas_mes_actual")
+
+  usuario       Usuario               @relation(fields: [idUsuario], references: [idUsuario])
+  cuestionarios CuestionarioAptitud[]
+  diferimientos Diferimiento[]
+  alertas       Alerta[]
+  turnos        Turno[]
+  donaciones    Donacion[]
+
+  @@map("donante")
+}
+
+model Institucion {
+  idInstitucion         String            @id @default(uuid()) @map("id_institucion") @db.Uuid
+  nombre                String            @db.VarChar(150)
+  direccion             String            @db.VarChar(255)
+  documentacionUrl      String?           @map("documentacion_url") @db.VarChar(500)
+  tipo                  TipoInstitucion
+  estado                EstadoInstitucion @default(pendiente)
+  motivoRechazo         String?           @map("motivo_rechazo") @db.VarChar(500)
+  idUsuarioAprobador    String?           @map("id_usuario_aprobador") @db.Uuid // null mientras está pendiente
+  latitud               Decimal           @db.Decimal(9, 6)
+  longitud              Decimal           @db.Decimal(9, 6)
+  intervaloDonacionDias Int               @default(56) @map("intervalo_donacion_dias")
+
+  usuarioAprobador          Usuario?             @relation(fields: [idUsuarioAprobador], references: [idUsuario])
+  usuarios                  UsuarioInstitucion[]
+  stockMinimo               StockMinimo[]
+  necesidades               Necesidad[]
+  franjasHorarias           FranjaHoraria[]
+  donaciones                Donacion[]
+  unidades                  UnidadSangre[]
+  transferenciasSolicitadas Transferencia[]      @relation("TransferenciaSolicitante")
+  transferenciasProvistas   Transferencia[]      @relation("TransferenciaProveedora")
+  movimientosOrigen         MovimientoUnidad[]   @relation("MovimientoOrigen")
+  movimientosDestino        MovimientoUnidad[]   @relation("MovimientoDestino")
+
+  @@map("institucion")
+}
+
+model UsuarioInstitucion {
+  idUsuario     String  @map("id_usuario") @db.Uuid
+  idInstitucion String  @map("id_institucion") @db.Uuid
+  cargo         String? @db.VarChar(100)
+
+  usuario     Usuario     @relation(fields: [idUsuario], references: [idUsuario])
+  institucion Institucion @relation(fields: [idInstitucion], references: [idInstitucion])
+
+  @@id([idUsuario, idInstitucion])
+  @@map("usuario_institucion")
+}
+
+// CORRECCIÓN 1: se agrega factor_rh (también a la PK). Sin él no se podía fijar
+// un mínimo distinto para O− que para O+.
+model StockMinimo {
+  idInstitucion   String         @map("id_institucion") @db.Uuid
+  grupoSanguineo  GrupoSanguineo @map("grupo_sanguineo")
+  factorRh        FactorRh       @map("factor_rh")
+  componente      Componente
+  unidadesMinimas Int            @map("unidades_minimas")
+
+  institucion Institucion @relation(fields: [idInstitucion], references: [idInstitucion])
+
+  @@id([idInstitucion, grupoSanguineo, factorRh, componente])
+  @@map("stock_minimo")
+}
+
+model SuscripcionPush {
+  idSuscripcionPush String   @id @default(uuid()) @map("id_suscripcion_push") @db.Uuid
+  idUsuario         String   @map("id_usuario") @db.Uuid
+  endpoint          String   @db.VarChar(500)
+  p256dh            String   @db.VarChar(255)
+  auth              String   @db.VarChar(255)
+  activo            Boolean  @default(true)
+  creadoEn          DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario @relation(fields: [idUsuario], references: [idUsuario])
+
+  @@map("suscripcion_push")
+}
+
+// ─── Aptitud y normativa ─────────────────────────────────────────────────────
+
+model Pregunta {
+  idPregunta        String       @id @default(uuid()) @map("id_pregunta") @db.Uuid
+  texto             String       @db.VarChar(500)
+  tipo              TipoPregunta
+  versionFormulario Int          @map("version_formulario")
+  activa            Boolean      @default(true)
+
+  respuestas RespuestaCuestionario[]
+
+  @@map("pregunta")
+}
+
+model CuestionarioAptitud {
+  idCuestionarioAptitud String                 @id @default(uuid()) @map("id_cuestionario_aptitud") @db.Uuid
+  idDonante             String                 @map("id_donante") @db.Uuid
+  versionFormulario     Int                    @map("version_formulario")
+  resultado             ResultadoCuestionario? // null mientras no está completo
+  origen                OrigenCuestionario
+  completadoEn          DateTime?              @map("completado_en")
+
+  donante    Donante                 @relation(fields: [idDonante], references: [idDonante])
+  respuestas RespuestaCuestionario[]
+
+  @@map("cuestionario_aptitud")
+}
+
+model RespuestaCuestionario {
+  idRespuestaCuestionario String @id @default(uuid()) @map("id_respuesta_cuestionario") @db.Uuid
+  idCuestionarioAptitud   String @map("id_cuestionario_aptitud") @db.Uuid
+  idPregunta              String @map("id_pregunta") @db.Uuid
+  valor                   String @db.VarChar(500)
+
+  cuestionario CuestionarioAptitud @relation(fields: [idCuestionarioAptitud], references: [idCuestionarioAptitud])
+  pregunta     Pregunta            @relation(fields: [idPregunta], references: [idPregunta])
+
+  @@unique([idCuestionarioAptitud, idPregunta])
+  @@map("respuesta_cuestionario")
+}
+
+model ReglaElegibilidad {
+  idReglaElegibilidad String     @id @default(uuid()) @map("id_regla_elegibilidad") @db.Uuid
+  codigo              String     @unique @db.VarChar(50)
+  tipo                TipoRegla
+  edadMin             Int?       @map("edad_min")
+  edadMax             Int?       @map("edad_max")
+  pesoMin             Decimal?   @map("peso_min") @db.Decimal(5, 2)
+  sexoAplica          SexoAplica @default(todos) @map("sexo_aplica")
+  diasDiferimiento    Int?       @map("dias_diferimiento") // null = diferimiento sin fecha de fin
+  vigenteDesde        DateTime   @map("vigente_desde") @db.Date
+  vigenteHasta        DateTime?  @map("vigente_hasta") @db.Date
+  fuenteNormativa     String     @map("fuente_normativa") @db.VarChar(255)
+
+  diferimientos Diferimiento[]
+
+  @@map("regla_elegibilidad")
+}
+
+model Diferimiento {
+  idDiferimiento      String             @id @default(uuid()) @map("id_diferimiento") @db.Uuid
+  idDonante           String             @map("id_donante") @db.Uuid
+  idReglaElegibilidad String?            @map("id_regla_elegibilidad") @db.Uuid // null si lo marca el hospital (func. 3)
+  origen              OrigenDiferimiento
+  motivo              String             @db.VarChar(500)
+  desde               DateTime           @db.Date
+  hasta               DateTime?          @db.Date
+
+  donante Donante            @relation(fields: [idDonante], references: [idDonante])
+  regla   ReglaElegibilidad? @relation(fields: [idReglaElegibilidad], references: [idReglaElegibilidad])
+
+  @@map("diferimiento")
+}
+
+model DocumentoNormativa {
+  idDocumentoNormativa String    @id @default(uuid()) @map("id_documento_normativa") @db.Uuid
+  titulo               String    @db.VarChar(255)
+  fuente               String    @db.VarChar(255)
+  url                  String?   @db.VarChar(500)
+  texto                String    @db.Text
+  vigenteDesde         DateTime  @map("vigente_desde") @db.Date
+  vigenteHasta         DateTime? @map("vigente_hasta") @db.Date
+
+  consultas ConsultaAsistente[]
+
+  @@map("documento_normativa")
+}
+
+model ConsultaAsistente {
+  idConsultaAsistente  String       @id @default(uuid()) @map("id_consulta_asistente") @db.Uuid
+  idUsuario            String       @map("id_usuario") @db.Uuid
+  tipo                 TipoConsulta
+  textoIngresado       String       @map("texto_ingresado") @db.Text
+  interpretacion       Json?
+  respuesta            String?      @db.Text
+  idDocumentoNormativa String?      @map("id_documento_normativa") @db.Uuid // null si no encontró fuente (func. 17)
+  confirmadoPorUsuario Boolean      @default(false) @map("confirmado_por_usuario")
+  creadaEn             DateTime     @default(now()) @map("creada_en")
+
+  usuario            Usuario             @relation(fields: [idUsuario], references: [idUsuario])
+  documentoNormativa DocumentoNormativa? @relation(fields: [idDocumentoNormativa], references: [idDocumentoNormativa])
+
+  @@map("consulta_asistente")
+}
+
+// ─── Demanda y convocatoria ──────────────────────────────────────────────────
+
+model Necesidad {
+  idNecesidad         String          @id @default(uuid()) @map("id_necesidad") @db.Uuid
+  idInstitucion       String          @map("id_institucion") @db.Uuid
+  grupoSanguineo      GrupoSanguineo  @map("grupo_sanguineo")
+  factorRh            FactorRh        @map("factor_rh")
+  componente          Componente
+  unidadesSolicitadas Int             @map("unidades_solicitadas")
+  unidadesCubiertas   Int             @default(0) @map("unidades_cubiertas")
+  urgencia            Urgencia
+  fechaLimite         DateTime        @map("fecha_limite") @db.Date
+  estado              EstadoNecesidad @default(abierta)
+  creadaEn            DateTime        @default(now()) @map("creada_en")
+  cerradaEn           DateTime?       @map("cerrada_en")
+
+  institucion    Institucion     @relation(fields: [idInstitucion], references: [idInstitucion])
+  convocatorias  Convocatoria[]
+  transferencias Transferencia[]
+
+  @@map("necesidad")
+}
+
+model Convocatoria {
+  idConvocatoria       String             @id @default(uuid()) @map("id_convocatoria") @db.Uuid
+  idNecesidad          String             @map("id_necesidad") @db.Uuid
+  radioKm              Decimal            @map("radio_km") @db.Decimal(7, 2)
+  cupoDisponible       Int                @map("cupo_disponible")
+  estado               EstadoConvocatoria @default(propuesta)
+  idUsuarioConfirmador String?            @map("id_usuario_confirmador") @db.Uuid // null hasta que el hospital confirma (func. 8)
+  creadaEn             DateTime           @default(now()) @map("creada_en")
+
+  necesidad          Necesidad @relation(fields: [idNecesidad], references: [idNecesidad])
+  usuarioConfirmador Usuario?  @relation(fields: [idUsuarioConfirmador], references: [idUsuario])
+  alertas            Alerta[]
+
+  @@map("convocatoria")
+}
+
+model Alerta {
+  idAlerta       String       @id @default(uuid()) @map("id_alerta") @db.Uuid
+  idConvocatoria String       @map("id_convocatoria") @db.Uuid
+  idDonante      String       @map("id_donante") @db.Uuid
+  canal          CanalAlerta
+  estado         EstadoAlerta @default(pendiente)
+  motivo         String       @db.VarChar(500)
+  distanciaKm    Decimal      @map("distancia_km") @db.Decimal(7, 2)
+  enviadaEn      DateTime?    @map("enviada_en")
+  respondidaEn   DateTime?    @map("respondida_en")
+
+  convocatoria Convocatoria @relation(fields: [idConvocatoria], references: [idConvocatoria])
+  donante      Donante      @relation(fields: [idDonante], references: [idDonante])
+  turno        Turno?
+
+  @@unique([idConvocatoria, idDonante])
+  @@map("alerta")
+}
+
+// ─── Agenda y donación ───────────────────────────────────────────────────────
+
+// cupo_ocupado tiene un CHECK (0 <= cupo_ocupado <= cupo_total) agregado a mano en la migración.
+model FranjaHoraria {
+  idFranjaHoraria String   @id @default(uuid()) @map("id_franja_horaria") @db.Uuid
+  idInstitucion   String   @map("id_institucion") @db.Uuid
+  fecha           DateTime @db.Date
+  horaInicio      DateTime @map("hora_inicio") @db.Time(0)
+  horaFin         DateTime @map("hora_fin") @db.Time(0)
+  cupoTotal       Int      @map("cupo_total")
+  cupoOcupado     Int      @default(0) @map("cupo_ocupado")
+  cerrada         Boolean  @default(false)
+
+  institucion Institucion @relation(fields: [idInstitucion], references: [idInstitucion])
+  turnos      Turno[]
+
+  @@map("franja_horaria")
+}
+
+// CORRECCIÓN 4: la UK (id_franja_horaria, id_donante) es parcial: ignora los turnos cancelados,
+// así un donante puede volver a reservar una franja que había cancelado. Está en la migración.
+// Reprogramar o cancelar modifica este mismo turno (no se crea otro), así se respeta el 1:1 con alerta.
+model Turno {
+  idTurno               String      @id @default(uuid()) @map("id_turno") @db.Uuid
+  idFranjaHoraria       String      @map("id_franja_horaria") @db.Uuid
+  idDonante             String      @map("id_donante") @db.Uuid
+  idAlerta              String      @unique @map("id_alerta") @db.Uuid
+  estado                EstadoTurno @default(reservado)
+  codigoQr              String      @unique @map("codigo_qr") @db.VarChar(100)
+  recordatorioEnviadoEn DateTime?   @map("recordatorio_enviado_en")
+
+  franjaHoraria FranjaHoraria @relation(fields: [idFranjaHoraria], references: [idFranjaHoraria])
+  donante       Donante       @relation(fields: [idDonante], references: [idDonante])
+  alerta        Alerta        @relation(fields: [idAlerta], references: [idAlerta])
+  donacion      Donacion?
+
+  @@map("turno")
+}
+
+// CORRECCIÓN 2: se agrega factor_rh_confirmado. Sin él no se podía completar el grupo
+// del donante al momento de la donación (func. 11).
+model Donacion {
+  idDonacion         String            @id @default(uuid()) @map("id_donacion") @db.Uuid
+  idTurno            String            @unique @map("id_turno") @db.Uuid
+  idDonante          String            @map("id_donante") @db.Uuid
+  idInstitucion      String            @map("id_institucion") @db.Uuid
+  fecha              DateTime          @db.Date
+  resultado          ResultadoDonacion
+  grupoConfirmado    GrupoSanguineo?   @map("grupo_confirmado")
+  factorRhConfirmado FactorRh?         @map("factor_rh_confirmado")
+
+  turno       Turno          @relation(fields: [idTurno], references: [idTurno])
+  donante     Donante        @relation(fields: [idDonante], references: [idDonante])
+  institucion Institucion    @relation(fields: [idInstitucion], references: [idInstitucion])
+  unidades    UnidadSangre[]
+
+  @@map("donacion")
+}
+
+// ─── Inventario y red ────────────────────────────────────────────────────────
+
+model UnidadSangre {
+  idUnidadSangre   String         @id @default(uuid()) @map("id_unidad_sangre") @db.Uuid
+  codigo           String         @unique @db.VarChar(50)
+  idInstitucion    String         @map("id_institucion") @db.Uuid
+  idDonacion       String?        @map("id_donacion") @db.Uuid // null si no viene de una donación registrada en el sistema
+  grupoSanguineo   GrupoSanguineo @map("grupo_sanguineo")
+  factorRh         FactorRh       @map("factor_rh")
+  componente       Componente
+  fechaExtraccion  DateTime       @map("fecha_extraccion") @db.Date
+  fechaVencimiento DateTime       @map("fecha_vencimiento") @db.Date
+  estado           EstadoUnidad   @default(disponible)
+
+  institucion        Institucion         @relation(fields: [idInstitucion], references: [idInstitucion])
+  donacion           Donacion?           @relation(fields: [idDonacion], references: [idDonacion])
+  movimientos        MovimientoUnidad[]
+  itemsTransferencia TransferenciaItem[]
+
+  @@map("unidad_sangre")
+}
+
+model MovimientoUnidad {
+  idMovimientoUnidad   String         @id @default(uuid()) @map("id_movimiento_unidad") @db.Uuid
+  idUnidadSangre       String         @map("id_unidad_sangre") @db.Uuid
+  tipo                 TipoMovimiento
+  estadoAnterior       EstadoUnidad?  @map("estado_anterior") // null en el ingreso
+  estadoNuevo          EstadoUnidad   @map("estado_nuevo")
+  idInstitucionOrigen  String?        @map("id_institucion_origen") @db.Uuid
+  idInstitucionDestino String?        @map("id_institucion_destino") @db.Uuid
+  idUsuario            String?        @map("id_usuario") @db.Uuid // null si lo hizo el sistema (ej.: vencimiento)
+  ocurridoEn           DateTime       @default(now()) @map("ocurrido_en")
+
+  unidad             UnidadSangre @relation(fields: [idUnidadSangre], references: [idUnidadSangre])
+  institucionOrigen  Institucion? @relation("MovimientoOrigen", fields: [idInstitucionOrigen], references: [idInstitucion])
+  institucionDestino Institucion? @relation("MovimientoDestino", fields: [idInstitucionDestino], references: [idInstitucion])
+  usuario            Usuario?     @relation(fields: [idUsuario], references: [idUsuario])
+
+  @@map("movimiento_unidad")
+}
+
+model Transferencia {
+  idTransferencia          String              @id @default(uuid()) @map("id_transferencia") @db.Uuid
+  idInstitucionSolicitante String              @map("id_institucion_solicitante") @db.Uuid
+  idInstitucionProveedora  String              @map("id_institucion_proveedora") @db.Uuid
+  idNecesidad              String?             @map("id_necesidad") @db.Uuid // null si se inicia a mano (func. 13)
+  estado                   EstadoTransferencia @default(pendiente)
+  motivoRechazo            String?             @map("motivo_rechazo") @db.VarChar(500)
+  plazoRespuesta           DateTime            @map("plazo_respuesta")
+  creadaEn                 DateTime            @default(now()) @map("creada_en")
+  recibidaEn               DateTime?           @map("recibida_en")
+
+  institucionSolicitante Institucion         @relation("TransferenciaSolicitante", fields: [idInstitucionSolicitante], references: [idInstitucion])
+  institucionProveedora  Institucion         @relation("TransferenciaProveedora", fields: [idInstitucionProveedora], references: [idInstitucion])
+  necesidad              Necesidad?          @relation(fields: [idNecesidad], references: [idNecesidad])
+  items                  TransferenciaItem[]
+
+  @@map("transferencia")
+}
+
+// CORRECCIÓN 3: la UK parcial del DER dependía del estado de otra tabla (transferencia), y Postgres
+// no lo permite. Se agrega "activo" (true mientras la transferencia está en curso) y la UK parcial
+// sobre id_unidad_sangre WHERE activo está en la migración: una unidad no puede estar en dos
+// transferencias en curso a la vez.
+model TransferenciaItem {
+  idTransferenciaItem String  @id @default(uuid()) @map("id_transferencia_item") @db.Uuid
+  idTransferencia     String  @map("id_transferencia") @db.Uuid
+  idUnidadSangre      String  @map("id_unidad_sangre") @db.Uuid
+  activo              Boolean @default(true)
+
+  transferencia Transferencia @relation(fields: [idTransferencia], references: [idTransferencia])
+  unidad        UnidadSangre  @relation(fields: [idUnidadSangre], references: [idUnidadSangre])
+
+  @@map("transferencia_item")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Rol {
+  donante
+  institucion
+  admin
+
+  @@map("rol")
+}
+
+enum GrupoSanguineo {
+  A
+  B
+  AB
+  O
+
+  @@map("grupo_sanguineo")
+}
+
+enum FactorRh {
+  positivo
+  negativo
+
+  @@map("factor_rh")
+}
+
+enum Componente {
+  sangre_entera
+  globulos_rojos
+  plaquetas
+
+  @@map("componente")
+}
+
+enum Sexo {
+  femenino
+  masculino
+  x
+
+  @@map("sexo")
+}
+
+enum SexoAplica {
+  todos
+  femenino
+  masculino
+
+  @@map("sexo_aplica")
+}
+
+enum TipoInstitucion {
+  hospital
+  banco_de_sangre
+
+  @@map("tipo_institucion")
+}
+
+enum EstadoInstitucion {
+  pendiente
+  aprobada
+  rechazada
+  baja
+
+  @@map("estado_institucion")
+}
+
+enum TipoPregunta {
+  si_no
+  numero
+  fecha
+  texto
+
+  @@map("tipo_pregunta")
+}
+
+enum ResultadoCuestionario {
+  apto
+  no_apto
+
+  @@map("resultado_cuestionario")
+}
+
+enum OrigenCuestionario {
+  formulario
+  asistente
+
+  @@map("origen_cuestionario")
+}
+
+enum TipoRegla {
+  edad
+  peso
+  intervalo_donacion
+  diferimiento
+
+  @@map("tipo_regla")
+}
+
+enum OrigenDiferimiento {
+  cuestionario
+  donacion
+  institucion
+
+  @@map("origen_diferimiento")
+}
+
+enum TipoConsulta {
+  cuestionario
+  necesidad
+  requisitos
+
+  @@map("tipo_consulta")
+}
+
+enum Urgencia {
+  urgente
+  normal
+
+  @@map("urgencia")
+}
+
+enum EstadoNecesidad {
+  abierta
+  cubierta
+  cerrada_manual
+  vencida
+
+  @@map("estado_necesidad")
+}
+
+enum EstadoConvocatoria {
+  propuesta
+  enviada
+  cerrada
+
+  @@map("estado_convocatoria")
+}
+
+enum CanalAlerta {
+  push
+  email
+  whatsapp
+
+  @@map("canal_alerta")
+}
+
+enum EstadoAlerta {
+  pendiente
+  enviada
+  aceptada
+  rechazada
+  cancelada
+
+  @@map("estado_alerta")
+}
+
+enum EstadoTurno {
+  reservado
+  cancelado
+  asistio
+  ausente
+
+  @@map("estado_turno")
+}
+
+enum ResultadoDonacion {
+  realizada
+  rechazada
+
+  @@map("resultado_donacion")
+}
+
+enum EstadoUnidad {
+  disponible
+  reservada
+  usada
+  vencida
+  descartada
+
+  @@map("estado_unidad")
+}
+
+enum TipoMovimiento {
+  ingreso
+  reserva
+  liberacion
+  uso
+  transferencia
+  vencimiento
+  descarte
+
+  @@map("tipo_movimiento")
+}
+
+enum EstadoTransferencia {
+  pendiente
+  aceptada
+  rechazada
+  expirada
+  cancelada
+  recibida
+
+  @@map("estado_transferencia")
+}
