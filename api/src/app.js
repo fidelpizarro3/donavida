@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/auth.routes');
 const donantesRoutes = require('./routes/donantes.routes');
-
+const institucionesRoutes = require('./routes/instituciones.routes');
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -11,7 +11,7 @@ app.use(express.json());
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/donantes', donantesRoutes);
-
+app.use('/api/instituciones', institucionesRoutes);
 // Express 5 manda acá también los errores de las rutas async, sin necesidad de try/catch
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') {
