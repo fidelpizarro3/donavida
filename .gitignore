@@ -18,3 +18,7 @@ npm-debug.log*
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Documentos sueltos en la raíz (entrega, DER, planilla, guías): cada uno tiene su copia local
+/*.pdf
+/*.xlsx

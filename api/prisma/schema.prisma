@@ -140,13 +140,20 @@ model SuscripcionPush {
 
 // ─── Aptitud y normativa ─────────────────────────────────────────────────────
 
+// CORRECCIÓN 5 (TAREA-3): el DER no decía qué regla dispara cada pregunta ni si su respuesta puede
+// cambiar. Se agregan codigo (identificador estable), id_regla_elegibilidad (la regla que se aplica
+// cuando la respuesta es afirmativa) y puede_cambiar (false = se responde una sola vez y no se repregunta).
 model Pregunta {
-  idPregunta        String       @id @default(uuid()) @map("id_pregunta") @db.Uuid
-  texto             String       @db.VarChar(500)
-  tipo              TipoPregunta
-  versionFormulario Int          @map("version_formulario")
-  activa            Boolean      @default(true)
+  idPregunta          String       @id @default(uuid()) @map("id_pregunta") @db.Uuid
+  codigo              String       @unique @db.VarChar(50)
+  texto               String       @db.VarChar(500)
+  tipo                TipoPregunta
+  versionFormulario   Int          @map("version_formulario")
+  activa              Boolean      @default(true)
+  puedeCambiar        Boolean      @default(true) @map("puede_cambiar")
+  idReglaElegibilidad String?      @map("id_regla_elegibilidad") @db.Uuid
 
+  regla      ReglaElegibilidad?      @relation(fields: [idReglaElegibilidad], references: [idReglaElegibilidad])
   respuestas RespuestaCuestionario[]
 
   @@map("pregunta")
@@ -193,6 +200,7 @@ model ReglaElegibilidad {
   fuenteNormativa     String     @map("fuente_normativa") @db.VarChar(255)
 
   diferimientos Diferimiento[]
+  preguntas     Pregunta[]
 
   @@map("regla_elegibilidad")
 }

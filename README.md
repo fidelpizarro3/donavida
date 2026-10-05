@@ -124,6 +124,9 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `POST /api/auth/login` | Body: `{ email, password }`. Devuelve `{ token, usuario }`; el token dura 8 horas. Hasta verificar el correo responde 403 `EMAIL_NO_VERIFICADO` |
 | `GET /api/auth/me` | Devuelve el usuario del token |
 | `GET` / `PATCH /api/donantes/perfil` | Perfil del donante: horario de contacto preferido y pausa de alertas |
+| `GET` / `POST /api/donantes/cuestionario` | Cuestionario de aptitud del donante: solo repregunta lo que puede cambiar |
+| `GET /api/donantes/:idDonante/habilitacion` | Si puede donar hoy y, si no, el motivo y la fecha de reingreso |
+| `POST /api/donantes/:idDonante/diferimientos` y `/donacion-registrada` | Para instituciones aprobadas: marcar no apto, y empezar la espera de 56 días tras una donación |
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.
