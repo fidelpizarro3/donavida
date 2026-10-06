@@ -101,11 +101,12 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | B, C | A | `GET /api/instituciones/:idInstitucion` | Datos, ubicación y estado de una institución |
 | C | A | `GET /api/instituciones?estado=aprobada` | Instituciones de la red con su ubicación (12) |
 | B | A | `GET /api/donantes/elegibles` | Candidatos para la convocatoria (8) |
-| B | A | `GET /api/donantes/:idDonante/habilitacion` | Validar antes de reservar un turno (10) |
+| B | A | `GET /api/donantes/:idDonante/habilitacion` | Validar antes de reservar un turno (10) ✅ implementado |
+| B | A | _interno_ `estaHabilitado(idDonante)` y `filtroDonantesHabilitados()` | "Está habilitado" para elegir a quién convocar (8) ✅ implementado |
 | B | A | _interno_ `obtenerContactoDonante(idDonante)` | Canales y suscripciones push para enviar la alerta (9) |
 | B | A | _interno_ `registrarAlertaEnviada(idDonante)` | Contar la alerta para el tope mensual (9) |
-| B | A | `POST /api/donantes/:idDonante/donacion-registrada` | Reiniciar el período de espera y completar el grupo (11) |
-| B | A | `POST /api/donantes/:idDonante/diferimientos` | Marcar a una persona como no apta (3, 11) |
+| B | A | `POST /api/donantes/:idDonante/donacion-registrada` | Reiniciar el período de espera y completar el grupo (11) ✅ implementado |
+| B | A | `POST /api/donantes/:idDonante/diferimientos` | Marcar a una persona como no apta (3, 11) ✅ implementado |
 | B | A | `POST /api/asistente/consultas` | Interpretar una necesidad escrita en lenguaje natural (16) |
 | A | B | `GET /api/donaciones?idDonante=` | Historial y cantidad de donaciones para el carné (18) |
 | A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
@@ -265,11 +266,75 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
   `distanciaKm` y `motivo` son calculados. El `motivo` es el que ve el donante en la alerta (func. 9).
 - El orden, el recorte por cupo de agenda y la confirmación del hospital los resuelve B (func. 8).
 
-#### `GET /api/donantes/:idDonante/habilitacion`
+#### `GET /api/donantes/:idDonante/habilitacion` ✅ implementado
 
-- **Rol:** `institucion`, o el propio `donante`.
-- **200:** `{ "habilitado": false, "aptoDesde": "2026-11-20", "motivo": "Donó el 2026-09-25 (56 días entre donaciones)" }`
-- **Errores:** 404 `NO_ENCONTRADO`.
+¿Puede donar hoy? Un donante está habilitado si respondió el cuestionario y no tiene ningún diferimiento vigente.
+Todo lo que impide donar es un `diferimiento`, con `origen` = `cuestionario` (una respuesta), `donacion` (la espera
+de 56 días) o `institucion` (el hospital lo marcó no apto).
+
+- **Rol:** el propio `donante`, o `institucion` (de una institución aprobada).
+- **200 para el donante:**
+  ```json
+  {
+    "habilitado": false,
+    "aptoDesde": "2026-11-20",
+    "motivo": "Donó sangre el 25/09/2026. Deben pasar 56 días entre donaciones de sangre entera.",
+    "cuestionarioCompleto": true,
+    "diferimientos": [
+      { "idDiferimiento": "<uuid>", "origen": "donacion", "motivo": "Donó sangre el 25/09/2026. ...", "desde": "2026-09-25", "hasta": "2026-11-20" }
+    ]
+  }
+  ```
+  - `aptoDesde` es la fecha de reingreso: el primer día en que puede volver a donar. Es `null` si está habilitado, si
+    le falta el cuestionario o si el diferimiento no tiene fecha de fin.
+  - `motivo` y `aptoDesde` salen del diferimiento que termina último; `diferimientos` trae todos los vigentes.
+  - Sin cuestionario respondido: `habilitado: false`, `cuestionarioCompleto: false` y el motivo lo explica.
+- **200 para la institución:** solo `habilitado`, `aptoDesde`, `motivo` y `cuestionarioCompleto`. Las respuestas del
+  cuestionario son datos de salud: si el motivo viene de una respuesta, se reemplaza por un texto genérico.
+- **Errores:** 403 `SIN_PERMISO` (otro donante, o institución no aprobada), 404 `NO_ENCONTRADO`.
+
+#### _interno_ `estaHabilitado(idDonante)` y `filtroDonantesHabilitados()` ✅ implementado
+
+Exportadas por `api/src/services/habilitacion.js` para la selección de donantes a convocar (func. 8).
+
+- `await estaHabilitado(idDonante)` → `true` o `false` (un donante que no existe da `false`).
+- `await obtenerHabilitacion(idDonante)` → el mismo objeto que ve el donante en el endpoint, o `null` si no existe.
+- `filtroDonantesHabilitados()` → un filtro de Prisma para traer muchos donantes habilitados en una sola consulta:
+  ```js
+  const { filtroDonantesHabilitados } = require('../services/habilitacion');
+  const candidatos = await prisma.donante.findMany({ where: { ...filtroDonantesHabilitados(), grupoSanguineo: 'O' } });
+  ```
+- `donante.apto_desde` guarda la fecha de reingreso como resumen, pero la fuente de verdad son los diferimientos
+  (queda en `null` cuando no hay fecha de fin): para saber si alguien puede donar hay que usar estas funciones.
+
+#### `GET /api/donantes/cuestionario` ✅ implementado
+
+- **Rol:** `donante`.
+- **200:**
+  ```json
+  {
+    "ultimaRespuestaEn": "2026-10-05T23:30:00.000Z",
+    "preguntas": [
+      { "idPregunta": "<uuid>", "codigo": "TATUAJE", "texto": "¿Te hiciste un tatuaje...?", "tipo": "fecha", "puedeCambiar": true, "respuestaAnterior": "no", "hayQueResponder": true },
+      { "idPregunta": "<uuid>", "codigo": "ENFERMEDAD_TRANSMISIBLE", "texto": "¿Tenés o tuviste...?", "tipo": "si_no", "puedeCambiar": false, "respuestaAnterior": "no", "hayQueResponder": false }
+    ]
+  }
+  ```
+  - `hayQueResponder` es `false` cuando la pregunta ya tiene respuesta y esa respuesta no cambia con el tiempo
+    (`pregunta.puede_cambiar = false`): solo se repregunta lo que puede cambiar.
+  - Solo trae las preguntas que aplican al sexo del donante (la de embarazo no se le hace a un donante masculino).
+
+#### `POST /api/donantes/cuestionario` ✅ implementado
+
+- **Rol:** `donante`.
+- **Body:** `{ "respuestas": [{ "idPregunta": "<uuid>", "valor": "no" }, { "idPregunta": "<uuid>", "valor": "2026-09-05" }] }`,
+  con una respuesta por cada pregunta que tenga `hayQueResponder: true`.
+  - Preguntas `si_no`: `"si"` o `"no"`.
+  - Preguntas `fecha`: la fecha del hecho (`YYYY-MM-DD`, no futura) o `"no"` si no le pasó.
+- **Qué hace A:** guarda el cuestionario con todas sus respuestas (las que no se repreguntan conservan la anterior),
+  reemplaza los diferimientos de las preguntas respondidas según la regla de cada una y actualiza `aptoDesde`.
+- **201:** la habilitación resultante, con la misma forma que `GET /api/donantes/:idDonante/habilitacion`.
+- **Errores:** 400 `DATOS_INVALIDOS` (falta una respuesta o tiene un valor inválido; no se guarda nada).
 
 #### _interno_ `obtenerContactoDonante(idDonante)`
 
@@ -289,21 +354,35 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 - Suma 1 a `donante.alertasMesActual`. B la llama cada vez que envía una alerta.
 - **Devuelve:** `{ alertasMesActual: 3, topeAlertasMes: 4 }`
 
-#### `POST /api/donantes/:idDonante/donacion-registrada`
+#### `POST /api/donantes/:idDonante/donacion-registrada` ✅ implementado
 
-- **Rol:** `institucion`.
-- **Body:** `{ "idDonacion": "<uuid>", "fecha": "2026-09-25", "grupoSanguineo": "O", "factorRh": "negativo" }`
-  (`grupoSanguineo` y `factorRh` son los confirmados; A solo los guarda si el donante no los tenía, func. 11).
-- **Qué hace A:** crea el `diferimiento` con origen `donacion` según `intervaloDonacionDias` y actualiza `aptoDesde`.
-- **200:** `{ "aptoDesde": "2026-11-20" }`
+La llama quien registra la donación (func. 11). También se puede llamar directo a
+`registrarDonacion(idDonante, { fecha, grupoSanguineo, factorRh })` de `api/src/services/habilitacion.js`.
 
-#### `POST /api/donantes/:idDonante/diferimientos`
+- **Rol:** `institucion` (de una institución aprobada).
+- **Body:** `{ "fecha": "2026-09-25", "grupoSanguineo": "O", "factorRh": "negativo" }`
+  - `fecha` es obligatoria y no puede ser futura.
+  - `grupoSanguineo` y `factorRh` son los confirmados en la donación: se envían juntos o se omiten. A solo los
+    guarda si el donante no los tenía (func. 2 y 11).
+- **Qué hace A:** crea el `diferimiento` con origen `donacion` desde `fecha` hasta `fecha` + los días de la regla
+  `INTERVALO_SANGRE_ENTERA` de `regla_elegibilidad` (56), y actualiza `aptoDesde`. El plazo sale de esa regla, no de
+  `institucion.intervalo_donacion_dias`. Avisar dos veces la misma fecha no duplica el diferimiento.
+- **200:** `{ "habilitado": false, "aptoDesde": "2026-11-20" }`
+- **Errores:** 400 `DATOS_INVALIDOS`, 403 `SIN_PERMISO`, 404 `NO_ENCONTRADO`.
 
-- **Rol:** `institucion`.
-- **Body:** `{ "motivo": "Hemoglobina baja en el control previo", "desde": "2026-10-01", "hasta": "2026-11-01" }`
-  (`hasta` es opcional: sin fecha, el diferimiento no tiene fin).
-- **Qué hace A:** crea el `diferimiento` con origen `institucion` y recalcula `aptoDesde`.
-- **201:** `{ "idDiferimiento": "<uuid>", "aptoDesde": "2026-11-01" }`
+#### `POST /api/donantes/:idDonante/diferimientos` ✅ implementado
+
+El hospital marca a una persona como no apta por un motivo médico.
+
+- **Rol:** `institucion` (de una institución aprobada).
+- **Body:** `{ "motivo": "Hemoglobina baja en el control previo", "desde": "2026-10-05", "hasta": "2026-11-04" }`
+  - `motivo` es obligatorio (hasta 500 caracteres) y es lo que va a leer el donante.
+  - `desde` es opcional (por defecto, hoy) y no puede ser futura.
+  - `hasta` es opcional: es el primer día en que puede volver a donar y tiene que ser futura. Sin `hasta`, el
+    diferimiento no tiene fecha de fin.
+- **Qué hace A:** crea el `diferimiento` con origen `institucion` (sin regla asociada) y actualiza `aptoDesde`.
+- **201:** `{ "idDiferimiento": "<uuid>", "habilitado": false, "aptoDesde": "2026-11-04" }`
+- **Errores:** 400 `DATOS_INVALIDOS`, 403 `SIN_PERMISO`, 404 `NO_ENCONTRADO`.
 
 #### `POST /api/asistente/consultas`
 

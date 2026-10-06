@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { AptitudDonante } from './AptitudDonante'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -213,6 +214,9 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
           </div>
         </div>
       </div>
+
+      {/* TAREA-3: habilitación para donar y cuestionario de aptitud */}
+      <AptitudDonante token={token} apiUrl={apiUrl} idDonante={perfil.idDonante} />
 
       {/* Criterio 2: Horarios preferidos de contacto */}
       <div className="card">
