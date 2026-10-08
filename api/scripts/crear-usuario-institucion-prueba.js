@@ -22,6 +22,7 @@ async function main() {
   );
 
   console.log('idUsuario:', usuario.idUsuario);
+  console.log('email:', usuario.email);
   console.log('token:', token);
 }
 

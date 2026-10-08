@@ -20,6 +20,34 @@ function mapearInstitucionPublica(institucion) {
   };
 }
 
+// GET /api/instituciones/mis-instituciones: instituciones del usuario autenticado, con datos privados
+// (va ANTES que /:idInstitucion a proposito: si fuera despues, Express interpretaria
+// "mis-instituciones" como si fuera un idInstitucion literal, porque :idInstitucion matchea cualquier texto)
+router.get('/mis-instituciones', autenticar, autorizar('institucion'), async (req, res) => {
+  const membresias = await prisma.usuarioInstitucion.findMany({
+    where: { idUsuario: req.usuario.id },
+    include: { institucion: true },
+  });
+
+  // a diferencia de mapearInstitucionPublica, esta vista SI muestra motivoRechazo y
+  // documentacionUrl, porque es informacion privada de quien pertenece a la institucion
+  const resultado = membresias.map((m) => ({
+    idInstitucion: m.institucion.idInstitucion,
+    nombre: m.institucion.nombre,
+    direccion: m.institucion.direccion,
+    documentacionUrl: m.institucion.documentacionUrl,
+    tipo: m.institucion.tipo,
+    estado: m.institucion.estado,
+    motivoRechazo: m.institucion.motivoRechazo,
+    latitud: Number(m.institucion.latitud),
+    longitud: Number(m.institucion.longitud),
+    intervaloDonacionDias: m.institucion.intervaloDonacionDias,
+    cargo: m.cargo,
+  }));
+
+  res.json(resultado);
+});
+
 // GET /api/instituciones/:idInstitucion: muestra datos públicos de una institución
 
 router.get("/:idInstitucion", autenticar, async (req, res) => {
@@ -174,7 +202,58 @@ router.patch('/:idInstitucion/baja', autenticar, autorizar('admin'), async (req,
   res.json(mapearInstitucionPublica(institucionActualizada));
 });
 
+// POST /api/instituciones/:idInstitucion/usuarios: suma otro usuario (ya registrado) a una institucion existente
+router.post('/:idInstitucion/usuarios', autenticar, autorizar('institucion'), async (req, res) => {
+  const { email, cargo } = req.body ?? {};
 
+  if (!email || !cargo) {
+    return datosInvalidos(res, 'Faltan datos obligatorios: email, cargo');
+  }
+
+  // quien pide esto tiene que pertenecer ya a esta institucion (si no, no deberia poder
+  // sumarle gente a una institucion que no es la suya)
+  const yaPertenece = await prisma.usuarioInstitucion.findUnique({
+    where: {
+      idUsuario_idInstitucion: {
+        idUsuario: req.usuario.id,
+        idInstitucion: req.params.idInstitucion,
+      },
+    },
+  });
+
+  if (!yaPertenece) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'No pertenecés a esta institución' },
+    });
+  }
+
+  // buscamos a la persona que se quiere sumar, por su email (nadie sabe de memoria el uuid de otro usuario)
+  const usuarioASumar = await prisma.usuario.findUnique({ where: { email } });
+
+  if (!usuarioASumar || usuarioASumar.rol !== 'institucion') {
+    return datosInvalidos(res, 'El email no corresponde a un usuario con rol institucion ya registrado');
+  }
+
+  try {
+    await prisma.usuarioInstitucion.create({
+      data: {
+        idUsuario: usuarioASumar.idUsuario,
+        idInstitucion: req.params.idInstitucion,
+        cargo,
+      },
+    });
+  } catch (err) {
+    // P2002 = Prisma dice "ya existe una fila con esa clave" -> esta persona ya era parte de esta institucion
+    if (err.code === 'P2002') {
+      return res.status(409).json({
+        error: { codigo: 'CONFLICTO', mensaje: 'Ese usuario ya pertenece a esta institución' },
+      });
+    }
+    throw err;
+  }
+
+  res.status(201).json({ mensaje: 'Usuario agregado a la institución' });
+});
 
 
 
