@@ -5,6 +5,7 @@ import { RegistroDonante } from './components/RegistroDonante'
 import { VerificarEmail } from './components/VerificarEmail'
 import { Login } from './components/Login'
 import { PerfilDonante } from './components/PerfilDonante'
+import { PanelInstitucion } from './components/PanelInstitucion'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -174,7 +175,11 @@ export default function App() {
             <PerfilDonante token={token} onCerrarSesion={handleCerrarSesion} apiUrl={API_URL} />
           )}
 
-          {vista === 'perfil' && token && !esDonante && (
+          {vista === 'perfil' && token && usuario?.rol === 'institucion' && (
+            <PanelInstitucion usuario={usuario} token={token} apiUrl={API_URL} onCerrarSesion={handleCerrarSesion} />
+          )}
+
+          {vista === 'perfil' && token && !esDonante && usuario?.rol !== 'institucion' && (
             <div className="card">
               <h2>Panel de Donante</h2>
               <div className="alert alert-warning">

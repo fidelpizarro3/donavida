@@ -903,3 +903,88 @@ input[type='radio'] {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 35%, transparent);
 }
+
+/* ─── Necesidades de la institución (TAREA-4) ───────────────────────────── */
+
+.necesidades-lista {
+  display: grid;
+  gap: 1rem;
+}
+
+.necesidad-tarjeta {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  background: var(--card-bg);
+}
+
+.necesidad-cerrada {
+  background: var(--bg-alt);
+}
+
+.necesidad-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.necesidad-datos {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.15rem;
+}
+
+.necesidad-datos small {
+  color: var(--text-muted);
+}
+
+.necesidad-etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.necesidad-pie {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.necesidad-pie strong {
+  color: var(--text-main);
+}
+
+.necesidad-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.necesidad-acciones input {
+  width: 6rem;
+}
+
+.badge-neutro {
+  background: var(--bg-alt);
+  color: var(--text-muted);
+}
+
+/* En una necesidad cerrada el fondo es gris: la barra y la etiqueta neutra necesitan contraste */
+.necesidad-cerrada .progreso {
+  background: var(--border-color);
+}
+
+.necesidad-cerrada .badge-neutro {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
