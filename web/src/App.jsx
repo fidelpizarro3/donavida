@@ -6,7 +6,7 @@ import { VerificarEmail } from './components/VerificarEmail'
 import { Login } from './components/Login'
 import { PerfilDonante } from './components/PerfilDonante'
 import { PanelInstitucion } from './components/PanelInstitucion'
-
+import { RegistroInstitucion } from './components/instituciones/RegistroInstitucion'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const PASOS_ALTA = ['Tus datos', 'Activar cuenta', 'Iniciar sesión']
@@ -101,7 +101,7 @@ export default function App() {
   }
 
   const esDonante = !usuario || usuario.rol === 'donante'
-  const enAlta = vista === 'registro' || vista === 'verificar' || (vista === 'login' && vieneDelAlta)
+  const enAlta = vista === 'registro' || vista === 'registro-institucion' || vista === 'verificar' || (vista === 'login' && vieneDelAlta)
 
   return (
     <div className="app">
@@ -122,6 +122,9 @@ export default function App() {
             <button type="button" className="btn btn-primary btn-chico" onClick={() => irA('registro')}>
               Quiero donar
             </button>
+            <button type="button" className="btn btn-secondary btn-chico" onClick={() => irA('registro-institucion')}>
+              Soy una institución
+            </button>
           </nav>
         )}
 
@@ -139,10 +142,18 @@ export default function App() {
 
       {vista !== 'inicio' && (
         <main className={`container ${vista === 'perfil' ? '' : 'container-angosto'}`}>
-          {enAlta && <PasosAlta actual={{ registro: 0, verificar: 1, login: 2 }[vista]} />}
+          {enAlta && <PasosAlta actual={{ registro: 0, 'registro-institucion': 0, verificar: 1, login: 2 }[vista]} />}
 
           {vista === 'registro' && (
             <RegistroDonante
+              onRegistroExitoso={handleRegistroExitoso}
+              onIrALogin={() => irA('login')}
+              apiUrl={API_URL}
+            />
+          )}
+
+          {vista === 'registro-institucion' && (
+            <RegistroInstitucion
               onRegistroExitoso={handleRegistroExitoso}
               onIrALogin={() => irA('login')}
               apiUrl={API_URL}
