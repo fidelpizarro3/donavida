@@ -1,9 +1,10 @@
 import { NecesidadesInstitucion } from './necesidades/NecesidadesInstitucion'
+import { DatosInstitucion } from './instituciones/DatosInstitucion'
 
 // Panel del usuario de una institución (hospital o banco de sangre).
 // Cada funcionalidad de la institución suma acá su sección:
 //   - TAREA-4: necesidades de sangre
-//   - TAREA-1 (pendiente): datos y estado de la institución
+//   - TAREA-1: datos y estado de la institución
 export function PanelInstitucion({ usuario, token, apiUrl, onCerrarSesion }) {
   return (
     <>
@@ -19,6 +20,7 @@ export function PanelInstitucion({ usuario, token, apiUrl, onCerrarSesion }) {
         </div>
       </div>
 
+      <DatosInstitucion token={token} apiUrl={apiUrl} />
       <NecesidadesInstitucion token={token} apiUrl={apiUrl} />
     </>
   )
