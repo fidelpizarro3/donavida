@@ -12,6 +12,13 @@ export const ESTADOS = {
   vencida: { texto: 'Vencida (no cubierta)', clase: 'badge-warning' },
 }
 
+// Por dónde le llega el aviso al donante (TAREA-8)
+export const CANALES = {
+  push: 'celular',
+  email: 'correo',
+  whatsapp: 'WhatsApp',
+}
+
 // "O" + "negativo" → "O−"
 export function grupoConFactor(grupo, factor) {
   return `${grupo}${factor === 'positivo' ? '+' : '−'}`

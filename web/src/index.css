@@ -988,3 +988,74 @@ input[type='radio'] {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
 }
+
+/* ─── Convocatoria de donantes (TAREA-8) ────────────────────────────────── */
+
+.convocatoria {
+  margin-top: 1rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.convocatoria-cupo {
+  margin: 1rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.convocatoria-cupo strong {
+  color: var(--text-main);
+}
+
+.convocatoria-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.convocatoria-lista li {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-main);
+}
+
+.convocatoria-lista li.convocatoria-elegido {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.convocatoria-lista label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+}
+
+.convocatoria-persona {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.15rem;
+}
+
+.convocatoria-persona small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.convocatoria-km {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.grupo-chip-chico {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}

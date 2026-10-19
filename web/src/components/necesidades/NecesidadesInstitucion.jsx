@@ -4,6 +4,7 @@ import { TarjetaNecesidad } from './TarjetaNecesidad'
 import { ESTADOS } from './textos'
 
 // TAREA-4 en el front: publicar, ver, corregir y cerrar las necesidades de la institución.
+// TAREA-8: convocar donantes para una necesidad abierta.
 // Toda la comunicación con la API pasa por la función pedir().
 export function NecesidadesInstitucion({ token, apiUrl }) {
   const [necesidades, setNecesidades] = useState([])
@@ -77,6 +78,13 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
   const cerrar = (idNecesidad) =>
     ejecutar(() => pedir(`/${idNecesidad}/cerrar`, { method: 'POST' }), 'Necesidad cerrada.')
 
+  // TAREA-8: datos = { radioKm, idsDonantes }
+  const convocar = (idNecesidad, datos) =>
+    ejecutar(
+      () => pedir(`/${idNecesidad}/convocatoria`, { method: 'POST', body: JSON.stringify(datos) }),
+      `Convocatoria confirmada: ${datos.idsDonantes.length} ${datos.idsDonantes.length === 1 ? 'persona va a recibir' : 'personas van a recibir'} el aviso.`
+    )
+
   return (
     <>
       {mensaje && <div className="alert alert-success">{mensaje}</div>}
@@ -108,6 +116,8 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
               necesidad={necesidad}
               onCorregir={corregir}
               onCerrar={cerrar}
+              onConvocar={convocar}
+              pedir={pedir}
               ocupado={ocupado}
             />
           ))}
