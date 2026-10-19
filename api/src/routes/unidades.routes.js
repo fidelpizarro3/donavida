@@ -1,5 +1,6 @@
 // TAREA-5: registrar el ingreso de unidades de sangre.
 // TAREA-6: consultar el stock de la institución.
+// TAREA-7: confirmar el descarte de una unidad vencida.
 // La ruta revisa permisos y que llegue una sola unidad; la lógica está en services/unidades.js.
 const { Router } = require('express');
 const prisma = require('../lib/prisma');
@@ -12,6 +13,7 @@ const {
   calcularDiasRestantes,
   estaPorVencer,
   mapearMovimiento,
+  marcarVencidas,
 } = require('../services/unidades');
 
 const router = Router();
@@ -274,6 +276,62 @@ router.patch('/:idUnidadSangre/usar', autenticar, autorizar('institucion'), asyn
 
   const unidad = await prisma.unidadSangre.findUnique({ where: { idUnidadSangre } });
   res.json(mapearUnidadConVencimiento(unidad, hoy));
+});
+
+// POST /api/unidades/:idUnidadSangre/descartar (TAREA-7): la institución confirma el descarte de una
+// unidad vencida, que cierra su recorrido. Pasa a "descartada" y queda el movimiento de descarte.
+router.post('/:idUnidadSangre/descartar', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada para descartar unidades' },
+    });
+  }
+
+  const { idUnidadSangre } = req.params;
+  if (!UUID_VALIDO.test(idUnidadSangre)) {
+    return datosInvalidos(res, 'idUnidadSangre no es un identificador válido');
+  }
+
+  // Si venció después de la última corrida de la tarea automática, se marca ahora: así se puede
+  // descartar enseguida, sin esperar a la próxima hora
+  await marcarVencidas();
+
+  const seDescarto = await prisma.$transaction(async (tx) => {
+    // Igual que "usar": chequear y cambiar en UNA sola operación. Si dos personas confirman
+    // a la vez, la segunda encuentra 0 filas y no la descarta de nuevo
+    const { count } = await tx.unidadSangre.updateMany({
+      where: { idUnidadSangre, idInstitucion, estado: 'vencida' },
+      data: { estado: 'descartada' },
+    });
+    if (count === 0) return false;
+
+    await tx.movimientoUnidad.create({
+      data: {
+        idUnidadSangre,
+        tipo: 'descarte',
+        estadoAnterior: 'vencida',
+        estadoNuevo: 'descartada',
+        idInstitucionOrigen: idInstitucion,
+        idUsuario: req.usuario.id,
+      },
+    });
+    return true;
+  });
+
+  if (!seDescarto) {
+    // No se pudo: averiguamos por qué para responder el error que corresponde
+    const unidad = await prisma.unidadSangre.findFirst({ where: { idUnidadSangre, idInstitucion } });
+    if (!unidad) {
+      return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'La unidad no existe en tu institución' } });
+    }
+    return res.status(409).json({
+      error: { codigo: 'CONFLICTO', mensaje: `Solo se descartan unidades vencidas: esta está ${unidad.estado}` },
+    });
+  }
+
+  const unidad = await prisma.unidadSangre.findUnique({ where: { idUnidadSangre } });
+  res.json(mapearUnidadConVencimiento(unidad, obtenerFechaHoy()));
 });
 
 // POST /api/unidades: la institución carga UNA unidad (no una cantidad agrupada)

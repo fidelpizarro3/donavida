@@ -1,9 +1,16 @@
 // TAREA-5: ingreso de unidades de sangre al inventario.
 // Lo usan POST /api/unidades (la institución carga una unidad) y el registro de la donación (DV-11),
 // que crea las unidades solo con registrarIngresoUnidad.
+// TAREA-7: el vencimiento automático (marcarVencidas, programado por server.js).
 const { randomBytes } = require('crypto');
 const prisma = require('../lib/prisma');
-const { GRUPOS_VALIDOS, FACTORES_VALIDOS, esFechaValida, obtenerFechaHoy } = require('../utils/validaciones');
+const {
+  GRUPOS_VALIDOS,
+  FACTORES_VALIDOS,
+  esFechaValida,
+  obtenerFechaHoy,
+  obtenerFechaHoyArgentina,
+} = require('../utils/validaciones');
 const { formatearFecha, parsearFecha } = require('../utils/formateadores');
 
 // Días que dura cada componente desde la extracción. El issue dice: glóbulos rojos ~42 días, plaquetas 5 a 7.
@@ -138,10 +145,60 @@ async function registrarIngresoUnidad(datos, db = prisma) {
   return { unidad };
 }
 
+// TAREA-7: pasa a "vencida" las unidades disponibles cuyo vencimiento es anterior a hoy (hora Argentina)
+// y registra un movimiento de "vencimiento" por cada una. La que vence hoy todavía se puede usar.
+// El cambio y la lista de las que cambiaron salen de UNA sola operación (UPDATE ... RETURNING):
+// si corre dos veces o choca con un "usar", ninguna unidad se marca ni se registra dos veces.
+// Solo toca las disponibles: el issue dice que "saca la unidad del stock disponible".
+// Devuelve cuántas marcó.
+async function marcarVencidas() {
+  const hoy = parsearFecha(obtenerFechaHoyArgentina());
+  return prisma.$transaction(async (tx) => {
+    const vencidas = await tx.unidadSangre.updateManyAndReturn({
+      where: { estado: 'disponible', fechaVencimiento: { lt: hoy } },
+      data: { estado: 'vencida' },
+      select: { idUnidadSangre: true, idInstitucion: true },
+    });
+    if (vencidas.length > 0) {
+      await tx.movimientoUnidad.createMany({
+        data: vencidas.map((unidad) => ({
+          idUnidadSangre: unidad.idUnidadSangre,
+          tipo: 'vencimiento',
+          estadoAnterior: 'disponible',
+          estadoNuevo: 'vencida',
+          idInstitucionOrigen: unidad.idInstitucion, // sale del stock disponible de esta institución
+          idUsuario: null, // lo hace el sistema
+        })),
+      });
+    }
+    return vencidas.length;
+  });
+}
+
+const UNA_HORA = 60 * 60 * 1000;
+
+// TAREA-7: la tarea automática. Corre al arrancar y después una vez por hora (la llama server.js).
+// En los tests no corre (Jest pone NODE_ENV=test): ahí nada tiene que cambiar la base por su cuenta.
+// Devuelve el intervalo, o null si no se programó.
+function programarVencimientoUnidades() {
+  if (process.env.NODE_ENV === 'test') return null;
+  const correr = () =>
+    marcarVencidas()
+      .then((cantidad) => {
+        if (cantidad > 0) console.log(`Vencimiento automático: ${cantidad} ${cantidad === 1 ? 'unidad pasó' : 'unidades pasaron'} a vencida`);
+      })
+      .catch(console.error);
+  correr();
+  return setInterval(correr, UNA_HORA);
+}
+
 module.exports = {
   // Para DV-11 (registro de la donación) y para la ruta
   registrarIngresoUnidad,
   mapearUnidad,
+  // TAREA-7: vencimiento automático (server.js lo programa; la ruta de descarte lo corre antes de descartar)
+  marcarVencidas,
+  programarVencimientoUnidades,
   // TAREA-6: para el stock
   calcularDiasRestantes,
   estaPorVencer,

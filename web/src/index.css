@@ -1217,3 +1217,40 @@ input[type='radio'] {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Descarte de unidades vencidas (TAREA-7) ────────────────────────────── */
+
+.acciones-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.acciones-fila .btn {
+  white-space: nowrap;
+}
+
+.confirmar-descarte {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.92rem;
+}
+
+.confirmar-descarte > span {
+  flex: 1 1 18rem;
+}
+
+/* Las filas que se despliegan (detalle, confirmar el descarte) ocupan lo que se ve de la tabla y no todo
+   su ancho: en el celular la tabla es más ancha que la pantalla y se desplaza de costado.
+   "cqw" es el ancho visible de .tabla-scroll (container-type), y sticky las deja quietas al desplazarla. */
+.tabla-scroll {
+  container-type: inline-size;
+}
+
+.tabla .fila-detalle td > * {
+  position: sticky;
+  left: 1.25rem;
+  max-width: calc(100cqw - 2.5rem);
+}

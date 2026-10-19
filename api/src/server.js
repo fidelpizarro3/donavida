@@ -13,3 +13,6 @@ const { cerrarVencidas } = require('./routes/necesidades.routes');
 const UNA_HORA = 60 * 60 * 1000;
 cerrarVencidas().catch(console.error);
 setInterval(() => cerrarVencidas().catch(console.error), UNA_HORA);
+// TAREA-7: marca como vencidas las unidades que pasaron su fecha, al arrancar y después una vez por hora
+const { programarVencimientoUnidades } = require('./services/unidades');
+programarVencimientoUnidades();

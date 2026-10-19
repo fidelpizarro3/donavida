@@ -64,6 +64,20 @@ function obtenerFechaHoy() {
   return `${y}-${m}-${d}`;
 }
 
+// TAREA-7: la fecha de hoy en Argentina (YYYY-MM-DD), sin importar la zona horaria de la máquina.
+// Entre las 21 y las 24 de Argentina en UTC ya es el día siguiente: un servidor en UTC
+// marcaría como vencidas unidades que todavía sirven. ("en-CA" escribe la fecha como YYYY-MM-DD)
+const FORMATO_FECHA_ARGENTINA = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function obtenerFechaHoyArgentina(ahora = new Date()) {
+  return FORMATO_FECHA_ARGENTINA.format(ahora);
+}
+
 function esFechaNacimientoValida(fecha) {
   if (!esFechaValida(fecha)) return false;
   const hoy = obtenerFechaHoy();
@@ -101,6 +115,7 @@ module.exports = {
   validarHorarioContacto,
   esFechaValida,
   obtenerFechaHoy,
+  obtenerFechaHoyArgentina,
   esFechaNacimientoValida,
   esFechaFuturaOPresente,
   datosInvalidos,
