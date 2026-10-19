@@ -74,6 +74,70 @@ router.get('/', autenticar, autorizar('institucion'), async (req, res) => {
   res.json(unidades.map((unidad) => mapearUnidadConVencimiento(unidad, hoy)));
 });
 
+// En qué contador del resumen suma una unidad según su estado
+const CONTADOR_POR_ESTADO = {
+  disponible: 'disponibles',
+  reservada: 'reservadas',
+  usada: 'usadas',
+  vencida: 'vencidas',
+  descartada: 'descartadas',
+};
+
+// GET /api/unidades/resumen: totales de mi stock por grupo, factor y componente,
+// comparados con el stock mínimo que haya definido la institución
+router.get('/resumen', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada para consultar stock' },
+    });
+  }
+
+  // Las dos consultas no dependen una de la otra: se hacen a la vez
+  const [unidades, minimos] = await Promise.all([
+    prisma.unidadSangre.findMany({ where: { idInstitucion } }),
+    prisma.stockMinimo.findMany({ where: { idInstitucion } }),
+  ]);
+
+  // Una fila por combinación "O|negativo|plaquetas". El Map la crea la primera vez que aparece
+  const filas = new Map();
+  function filaDe(grupoSanguineo, factorRh, componente) {
+    const clave = `${grupoSanguineo}|${factorRh}|${componente}`;
+    if (!filas.has(clave)) {
+      filas.set(clave, {
+        grupoSanguineo, factorRh, componente,
+        disponibles: 0, porVencer: 0, reservadas: 0, usadas: 0, vencidas: 0, descartadas: 0,
+        minimo: null,
+      });
+    }
+    return filas.get(clave);
+  }
+
+  const hoy = obtenerFechaHoy();
+  for (const unidad of unidades) {
+    const u = mapearUnidadConVencimiento(unidad, hoy);
+    // Hasta que corra el descarte automático (TAREA-7), una vencida puede seguir "disponible"
+    // en la base: para el resumen ya no sirve, así que se cuenta como vencida
+    const estado = u.estado === 'disponible' && u.diasRestantes < 0 ? 'vencida' : u.estado;
+    const fila = filaDe(u.grupoSanguineo, u.factorRh, u.componente);
+    fila[CONTADOR_POR_ESTADO[estado]] += 1;
+    if (u.porVencer) fila.porVencer += 1;
+  }
+
+  // El mínimo aparece aunque no haya ninguna unidad de ese grupo: justo ahí es cuando más falta
+  for (const minimo of minimos) {
+    filaDe(minimo.grupoSanguineo, minimo.factorRh, minimo.componente).minimo = minimo.unidadesMinimas;
+  }
+
+  const resumen = [...filas.values()]
+    .map((fila) => ({ ...fila, bajoMinimo: fila.minimo !== null && fila.disponibles < fila.minimo }))
+    .sort((a, b) =>
+      `${a.grupoSanguineo}${a.factorRh}${a.componente}`.localeCompare(`${b.grupoSanguineo}${b.factorRh}${b.componente}`)
+    );
+
+  res.json(resumen);
+});
+
 // POST /api/unidades: la institución carga UNA unidad (no una cantidad agrupada)
 //   Body: { "grupoSanguineo": "O", "factorRh": "negativo", "componente": "globulos_rojos", "fechaExtraccion": "2026-10-15" }
 router.post('/', autenticar, autorizar('institucion'), async (req, res) => {
