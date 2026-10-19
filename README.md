@@ -127,6 +127,7 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `GET` / `POST /api/donantes/cuestionario` | Cuestionario de aptitud del donante: solo repregunta lo que puede cambiar |
 | `GET /api/donantes/:idDonante/habilitacion` | Si puede donar hoy y, si no, el motivo y la fecha de reingreso |
 | `POST /api/donantes/:idDonante/diferimientos` y `/donacion-registrada` | Para instituciones aprobadas: marcar no apto, y empezar la espera de 56 días tras una donación |
+| `POST /api/unidades` | Para instituciones aprobadas: carga una unidad de glóbulos rojos o plaquetas. El sistema le pone el código y calcula el vencimiento |
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.

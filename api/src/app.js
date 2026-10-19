@@ -6,6 +6,7 @@ const donantesRoutes = require('./routes/donantes.routes');
 const aptitudRoutes = require('./routes/aptitud.routes');
 const institucionesRoutes = require('./routes/instituciones.routes');
 const necesidadesRoutes = require('./routes/necesidades.routes');
+const unidadesRoutes = require('./routes/unidades.routes');
 
 const app = express();
 app.use(cors());
@@ -17,6 +18,7 @@ app.use('/api/donantes', donantesRoutes);
 app.use('/api/donantes', aptitudRoutes); // cuestionario y habilitación (TAREA-3)
 app.use('/api/instituciones', institucionesRoutes);
 app.use('/api/necesidades', necesidadesRoutes);
+app.use('/api/unidades', unidadesRoutes); // ingreso de unidades de sangre (TAREA-5)
 
 // Express 5 manda acá también los errores de las rutas async, sin necesidad de try/catch
 app.use((err, req, res, next) => {
