@@ -32,6 +32,23 @@ function calcularVencimiento(componente, fechaExtraccion) {
   return formatearFecha(new Date(parsearFecha(fechaExtraccion).getTime() + dias * MS_POR_DIA));
 }
 
+// TAREA-6: desde cuántos días antes de vencer una unidad se muestra "por vencer".
+// No se guarda en la base: se calcula en cada consulta, porque cambia sola con los días.
+// Las plaquetas duran 5 días en total, por eso su aviso es mucho más corto.
+const DIAS_AVISO_VENCIMIENTO = {
+  globulos_rojos: 7,
+  plaquetas: 2,
+};
+
+// Días que le quedan a una unidad (fechas YYYY-MM-DD): 0 si vence hoy, negativo si ya venció
+function calcularDiasRestantes(fechaVencimiento, hoy) {
+  return Math.round((parsearFecha(fechaVencimiento).getTime() - parsearFecha(hoy).getTime()) / MS_POR_DIA);
+}
+
+function estaPorVencer(componente, diasRestantes) {
+  return diasRestantes >= 0 && diasRestantes <= DIAS_AVISO_VENCIMIENTO[componente];
+}
+
 // Revisa los datos de una unidad nueva. Devuelve el mensaje de error, o null si está todo bien
 function validarIngreso({ grupoSanguineo, factorRh, componente, fechaExtraccion }, hoy) {
   if (!GRUPOS_VALIDOS.includes(grupoSanguineo)) return 'grupoSanguineo debe ser A, B, AB u O';
@@ -109,8 +126,12 @@ module.exports = {
   // Para DV-11 (registro de la donación) y para la ruta
   registrarIngresoUnidad,
   mapearUnidad,
+  // TAREA-6: para el stock
+  calcularDiasRestantes,
+  estaPorVencer,
   // Lógica pura, exportada para los tests
   DIAS_DE_VIDA,
+  DIAS_AVISO_VENCIMIENTO,
   generarCodigo,
   calcularVencimiento,
   validarIngreso,
