@@ -1059,3 +1059,161 @@ input[type='radio'] {
   font-size: 0.95rem;
   flex-shrink: 0;
 }
+
+/* ─── Stock de la institución (TAREA-6) ──────────────────────────────────── */
+
+.aviso-vencer ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.aviso-vencer li + li {
+  margin-top: 0.25rem;
+}
+
+.codigo-unidad {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* En pantallas angostas la tabla se desplaza de costado en vez de romper la página.
+   position: relative hace que el texto oculto (.solo-lectores) quede dentro y no estire la página */
+.tabla-scroll {
+  position: relative;
+  overflow-x: auto;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.tabla th {
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 0 0.75rem 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.tabla td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.tabla .tabla-numero {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tabla .fila-alerta td {
+  background: var(--danger-light);
+}
+
+.badge-en-tabla {
+  margin-left: 0.4rem;
+}
+
+.tabla .fila-detalle td {
+  background: var(--bg-main);
+  padding: 1rem 1.25rem;
+}
+
+.texto-chico {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.texto-error {
+  color: var(--danger);
+  margin: 0;
+}
+
+.form-grid-tres {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.filtros select {
+  flex: 1 1 11rem;
+}
+
+.detalle-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0 0 1rem;
+}
+
+.detalle-datos dt {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.detalle-datos dd {
+  margin: 0.15rem 0 0;
+}
+
+.detalle-titulo {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+/* El recorrido de la unidad: una línea de tiempo, del ingreso al último movimiento */
+.recorrido {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.recorrido li {
+  position: relative;
+  padding: 0 0 0.8rem 0.5rem;
+}
+
+.recorrido li::before {
+  content: '';
+  position: absolute;
+  left: -1.42rem;
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.recorrido small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* Texto que solo leen los lectores de pantalla (por ejemplo, el título de una columna de botones) */
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .form-grid-tres {
+    grid-template-columns: 1fr;
+  }
+}

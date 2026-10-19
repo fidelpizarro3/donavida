@@ -80,6 +80,22 @@ function mapearUnidad(unidad) {
   };
 }
 
+// TAREA-6: un paso del recorrido de la unidad, para el detalle.
+// usuario en null = lo hizo el sistema (por ejemplo, el vencimiento automático)
+function mapearMovimiento(movimiento) {
+  const institucion = (i) => (i ? { idInstitucion: i.idInstitucion, nombre: i.nombre } : null);
+  return {
+    idMovimientoUnidad: movimiento.idMovimientoUnidad,
+    tipo: movimiento.tipo,
+    estadoAnterior: movimiento.estadoAnterior,
+    estadoNuevo: movimiento.estadoNuevo,
+    institucionOrigen: institucion(movimiento.institucionOrigen),
+    institucionDestino: institucion(movimiento.institucionDestino),
+    usuario: movimiento.usuario ? { nombre: movimiento.usuario.nombre, apellido: movimiento.usuario.apellido } : null,
+    ocurridoEn: movimiento.ocurridoEn,
+  };
+}
+
 // Crea UNA unidad en estado "disponible" y su movimiento de "ingreso", juntos: si falla uno no queda ninguno.
 //   datos: { idInstitucion, grupoSanguineo, factorRh, componente, fechaExtraccion, idDonacion?, idUsuario? }
 // Para DV-11: idDonacion es la donación que generó la unidad, y db puede ser la transacción
@@ -129,6 +145,7 @@ module.exports = {
   // TAREA-6: para el stock
   calcularDiasRestantes,
   estaPorVencer,
+  mapearMovimiento,
   // Lógica pura, exportada para los tests
   DIAS_DE_VIDA,
   DIAS_AVISO_VENCIMIENTO,

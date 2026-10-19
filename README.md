@@ -128,6 +128,11 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `GET /api/donantes/:idDonante/habilitacion` | Si puede donar hoy y, si no, el motivo y la fecha de reingreso |
 | `POST /api/donantes/:idDonante/diferimientos` y `/donacion-registrada` | Para instituciones aprobadas: marcar no apto, y empezar la espera de 56 días tras una donación |
 | `POST /api/unidades` | Para instituciones aprobadas: carga una unidad de glóbulos rojos o plaquetas. El sistema le pone el código y calcula el vencimiento |
+| `GET /api/unidades` | Stock de la institución, de la que vence primero a la última, con `diasRestantes` y `porVencer`. Filtros: `?grupoSanguineo=&factorRh=&componente=&estado=` |
+| `GET /api/unidades/resumen` | Totales por grupo, factor y componente (disponibles, por vencer, usadas, vencidas...) comparados con el stock mínimo |
+| `GET /api/unidades/:idUnidadSangre` | Detalle de una unidad: cuándo ingresó, de dónde vino y sus movimientos |
+| `PUT /api/unidades/stock-minimo` | Define el stock mínimo de un grupo, factor y componente. Body: `{ grupoSanguineo, factorRh, componente, unidadesMinimas }` |
+| `PATCH /api/unidades/:idUnidadSangre/usar` | Usa una unidad disponible: sale del stock y queda el movimiento de uso |
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.

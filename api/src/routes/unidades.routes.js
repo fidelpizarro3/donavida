@@ -11,6 +11,7 @@ const {
   mapearUnidad,
   calcularDiasRestantes,
   estaPorVencer,
+  mapearMovimiento,
 } = require('../services/unidades');
 
 const router = Router();
@@ -140,6 +141,46 @@ router.get('/resumen', autenticar, autorizar('institucion'), async (req, res) =>
     );
 
   res.json(resumen);
+});
+
+// GET /api/unidades/:idUnidadSangre: el detalle de una unidad de mi institución y todo su recorrido:
+// cuándo ingresó y de dónde vino (idDonacion; null si se cargó a mano), y qué pasó con ella (movimientos).
+// Va DESPUÉS de /resumen: si estuviera antes, Express tomaría "resumen" como un idUnidadSangre.
+router.get('/:idUnidadSangre', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada para consultar stock' },
+    });
+  }
+
+  const { idUnidadSangre } = req.params;
+  if (!UUID_VALIDO.test(idUnidadSangre)) {
+    return datosInvalidos(res, 'idUnidadSangre no es un identificador válido');
+  }
+
+  // Solo si es de mi institución: la de otra da 404, sin revelar que existe
+  const unidad = await prisma.unidadSangre.findFirst({
+    where: { idUnidadSangre, idInstitucion },
+    include: {
+      movimientos: {
+        orderBy: { ocurridoEn: 'asc' }, // del primero (el ingreso) al último
+        include: {
+          institucionOrigen: { select: { idInstitucion: true, nombre: true } },
+          institucionDestino: { select: { idInstitucion: true, nombre: true } },
+          usuario: { select: { nombre: true, apellido: true } },
+        },
+      },
+    },
+  });
+  if (!unidad) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'La unidad no existe en tu institución' } });
+  }
+
+  res.json({
+    ...mapearUnidadConVencimiento(unidad, obtenerFechaHoy()),
+    movimientos: unidad.movimientos.map(mapearMovimiento),
+  });
 });
 
 // PUT /api/unidades/stock-minimo: la institución fija su mínimo de seguridad para un grupo y componente.
