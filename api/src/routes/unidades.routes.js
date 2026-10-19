@@ -138,6 +138,48 @@ router.get('/resumen', autenticar, autorizar('institucion'), async (req, res) =>
   res.json(resumen);
 });
 
+// PUT /api/unidades/stock-minimo: la institución fija su mínimo de seguridad para un grupo y componente.
+// Si ya había uno, se reemplaza (por eso PUT y upsert: mandar lo mismo dos veces deja todo igual)
+//   Body: { "grupoSanguineo": "O", "factorRh": "negativo", "componente": "plaquetas", "unidadesMinimas": 4 }
+router.put('/stock-minimo', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada para definir stock mínimo' },
+    });
+  }
+
+  const { grupoSanguineo, factorRh, componente, unidadesMinimas } = req.body ?? {};
+  if (!GRUPOS_VALIDOS.includes(grupoSanguineo)) {
+    return datosInvalidos(res, `grupoSanguineo debe ser uno de: ${GRUPOS_VALIDOS.join(', ')}`);
+  }
+  if (!FACTORES_VALIDOS.includes(factorRh)) {
+    return datosInvalidos(res, `factorRh debe ser uno de: ${FACTORES_VALIDOS.join(', ')}`);
+  }
+  if (!COMPONENTES.includes(componente)) {
+    return datosInvalidos(res, `componente debe ser uno de: ${COMPONENTES.join(', ')}`);
+  }
+  // Un número entero, sin decimales ni negativos (0 = sin mínimo para ese grupo)
+  if (!Number.isInteger(unidadesMinimas) || unidadesMinimas < 0 || unidadesMinimas > 1000) {
+    return datosInvalidos(res, 'unidadesMinimas debe ser un número entero entre 0 y 1000');
+  }
+
+  // La clave compuesta de stock_minimo son estos 4 campos: Prisma les arma un nombre combinado
+  const clave = { idInstitucion, grupoSanguineo, factorRh, componente };
+  const minimo = await prisma.stockMinimo.upsert({
+    where: { idInstitucion_grupoSanguineo_factorRh_componente: clave },
+    create: { ...clave, unidadesMinimas }, // si no existía: se crea
+    update: { unidadesMinimas }, // si ya existía: solo cambia el número
+  });
+
+  res.json({
+    grupoSanguineo: minimo.grupoSanguineo,
+    factorRh: minimo.factorRh,
+    componente: minimo.componente,
+    unidadesMinimas: minimo.unidadesMinimas,
+  });
+});
+
 // POST /api/unidades: la institución carga UNA unidad (no una cantidad agrupada)
 //   Body: { "grupoSanguineo": "O", "factorRh": "negativo", "componente": "globulos_rojos", "fechaExtraccion": "2026-10-15" }
 router.post('/', autenticar, autorizar('institucion'), async (req, res) => {
