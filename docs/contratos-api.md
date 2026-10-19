@@ -115,7 +115,7 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
 | B | C | `GET /api/inventario/disponibilidad-red` | Buscar unidades en la red antes de convocar (12) |
 | B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) |
-| B | C | `POST /api/unidades` | Cargar la unidad que genera una donación (5, 11) |
+| B | C | _interno_ `registrarIngresoUnidad(datos, db)` | Cargar las unidades que genera una donación (5, 11) ✅ implementado |
 
 ## 4. Detalle de cada contrato
 
@@ -526,24 +526,59 @@ El hospital marca a una persona como no apta por un motivo médico.
   presta no responde antes de `plazoRespuesta`, la transferencia pasa a `expirada`, las unidades vuelven a
   `disponible` y B convoca donantes.
 
-#### `POST /api/unidades`
+#### `POST /api/unidades` ✅ implementado
 
-- **Rol:** `institucion`.
-- **Body:**
+- **Rol:** `institucion`, de una institución `aprobada` (si no, 403 `SIN_PERMISO`). La unidad entra a esa institución.
+- **Body:** una sola unidad (las unidades se cargan de a una; si llega una lista, 400):
   ```json
   {
-    "idInstitucion": "<uuid>",
-    "idDonacion": "<uuid>",
     "grupoSanguineo": "O",
     "factorRh": "negativo",
     "componente": "globulos_rojos",
     "fechaExtraccion": "2026-09-25"
   }
   ```
-  `idDonacion` es opcional: se completa cuando la unidad sale de una donación registrada en el sistema.
-  `codigo` también es opcional: si no viene, C lo genera.
-- **Qué hace C:** calcula `fechaVencimiento` según el componente y registra el `movimiento_unidad` de tipo `ingreso`.
-- **201:** `{ "idUnidadSangre": "<uuid>", "codigo": "U-000212", "fechaVencimiento": "2026-11-06", "estado": "disponible" }`
+  - `componente`: `globulos_rojos` o `plaquetas`. Sangre entera todavía no: falta definir cuánto dura.
+  - `fechaExtraccion` no puede ser futura, y la unidad no puede estar ya vencida.
+- **Qué hace C:** genera el `codigo` (`U-` y 10 caracteres, único), calcula `fechaVencimiento` (extracción + 42 días
+  para glóbulos rojos, + 5 para plaquetas) y crea la unidad en `disponible` junto con su `movimiento_unidad` de tipo
+  `ingreso`, en una transacción.
+- **201:**
+  ```json
+  {
+    "idUnidadSangre": "<uuid>",
+    "codigo": "U-7K3M9QX2RD",
+    "idInstitucion": "<uuid>",
+    "idDonacion": null,
+    "grupoSanguineo": "O",
+    "factorRh": "negativo",
+    "componente": "globulos_rojos",
+    "fechaExtraccion": "2026-09-25",
+    "fechaVencimiento": "2026-11-06",
+    "estado": "disponible"
+  }
+  ```
+
+#### _interno_ `registrarIngresoUnidad(datos, db)` ✅ implementado
+
+Exportada por `api/src/services/unidades.js` para que el registro de la donación (func. 11) cargue solas las unidades
+que genera. Hace lo mismo que `POST /api/unidades`, con las mismas validaciones.
+
+- `datos`: `{ idInstitucion, grupoSanguineo, factorRh, componente, fechaExtraccion, idDonacion, idUsuario }`.
+  `idDonacion` vincula la unidad con la donación; `idUsuario` es quien la registró (sin él, el movimiento queda
+  como hecho por el sistema). Qué donaciones generan unidades y de qué componente lo decide B.
+- `db` (opcional): la transacción de quien la llama, para que la donación y sus unidades se guarden juntas.
+- Devuelve `{ unidad }` o, si los datos no son válidos, `{ error: "<mensaje>" }` sin crear nada.
+  ```js
+  const { registrarIngresoUnidad } = require('../services/unidades');
+  await prisma.$transaction(async (tx) => {
+    const donacion = await tx.donacion.create({ data: { /* ... */ } });
+    const { unidad, error } = await registrarIngresoUnidad({
+      idInstitucion, idDonacion: donacion.idDonacion, idUsuario,
+      grupoSanguineo: 'O', factorRh: 'negativo', componente: 'globulos_rojos', fechaExtraccion: '2026-09-25',
+    }, tx);
+  });
+  ```
 
 ## 5. Cómo se cambia un contrato
 
