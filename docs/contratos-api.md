@@ -463,6 +463,57 @@ El hospital marca a una persona como no apta por un motivo médico.
   ```
   `unidadesFaltantes` es calculado (`unidadesSolicitadas - unidadesCubiertas`).
 
+#### `POST /api/necesidades/:idNecesidad/convocatoria/propuesta` ✅ implementado
+
+Lista sugerida de donantes para una necesidad `abierta` (TAREA-8). **No guarda nada.**
+
+- **Rol:** `institucion` (de una institución aprobada, dueña de la necesidad).
+- **Body (opcional):** `{ "radioKm": 20 }` (por defecto 20, máximo 500).
+- **Filtros:** grupo y factor compatibles, `filtroDonantesHabilitados()`, alertas no pausadas, sin llegar al tope
+  mensual, con algún canal de aviso activado, con ubicación cargada, dentro del radio y sin una alerta previa para
+  esta misma necesidad.
+- **Orden:** primero grupo exacto, después compatible; dentro de cada uno, el más cercano primero.
+- **Cupo:** suma de lugares libres de las `franja_horaria` abiertas de la institución hasta la `fechaLimite`.
+  Si la institución todavía no tiene agenda (DV-10), se usan las unidades que faltan (`segun: "unidades_faltantes"`).
+- **200:**
+  ```json
+  {
+    "idNecesidad": "<uuid>",
+    "radioKm": 20,
+    "cupo": { "disponible": 4, "segun": "agenda" },
+    "sugeridos": [
+      {
+        "idDonante": "<uuid>",
+        "nombre": "Lucía",
+        "apellido": "Gómez",
+        "grupoSanguineo": "O",
+        "factorRh": "negativo",
+        "grupoExacto": true,
+        "distanciaKm": 0.3,
+        "canal": "push",
+        "motivo": "Mismo grupo (O−). Habilitado para donar. A 0.3 km de la institución."
+      }
+    ],
+    "otrosCandidatos": []
+  }
+  ```
+  `sugeridos` son los que entran en el cupo; `otrosCandidatos`, los que el hospital puede agregar a mano.
+  `canal`: urgente → primero `push`, normal → primero `email`, siempre uno que el donante tenga activado.
+- **Errores:** 400 `DATOS_INVALIDOS` (radio), 404 `NO_ENCONTRADO`, 409 `CONFLICTO` si la necesidad no está `abierta`.
+
+#### `POST /api/necesidades/:idNecesidad/convocatoria` ✅ implementado
+
+El hospital confirma la lista (con los cambios que haya hecho) y se guarda (TAREA-8).
+
+- **Rol:** `institucion`.
+- **Body:** `{ "radioKm": 20, "idsDonantes": ["<uuid>", "..."] }`
+- **Qué hace B:** vuelve a revisar que cada persona siga siendo candidata y que no se pase del cupo. En una
+  transacción crea la `convocatoria` (`estado: enviada`, `radioKm`, `cupoDisponible`, `idUsuarioConfirmador`)
+  y una `alerta` `pendiente` por persona, con su `canal`, `motivo` y `distanciaKm`. El envío lo hace DV-9.
+- **201:** la convocatoria con sus `alertas` (`idDonante`, `nombre`, `apellido`, `canal`, `motivo`, `distanciaKm`, `estado`).
+- **Errores:** 400 `DATOS_INVALIDOS` (lista vacía, ids inválidos o repetidos), 404 `NO_ENCONTRADO`,
+  409 `CONFLICTO` (necesidad no abierta, más personas que el cupo o alguien que ya no se puede convocar).
+
 #### `PATCH /api/necesidades/:idNecesidad/cobertura`
 
 - **Rol:** `institucion`.

@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { COMPONENTES, ESTADOS, grupoConFactor, fechaLegible } from './textos'
+import { ConvocatoriaNecesidad } from './ConvocatoriaNecesidad'
 
 // Una necesidad: qué se pide, cuánto falta (barra de progreso) y, si está abierta,
-// los botones para corregir la cantidad o cerrarla a mano.
-export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, ocupado }) {
+// los botones para convocar donantes, corregir la cantidad o cerrarla a mano.
+export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, pedir, ocupado }) {
   const [editando, setEditando] = useState(false)
   const [cantidad, setCantidad] = useState(necesidad.unidadesSolicitadas)
   const [confirmandoCierre, setConfirmandoCierre] = useState(false)
+  const [convocando, setConvocando] = useState(false)
 
   const estado = ESTADOS[necesidad.estado]
   const estaAbierta = necesidad.estado === 'abierta'
@@ -40,8 +42,11 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, ocupado }) {
         <span>Faltan <strong>{necesidad.unidadesFaltantes}</strong></span>
       </div>
 
-      {estaAbierta && !editando && !confirmandoCierre && (
+      {estaAbierta && !editando && !confirmandoCierre && !convocando && (
         <div className="necesidad-acciones">
+          <button type="button" className="btn btn-primary btn-chico" onClick={() => setConvocando(true)} disabled={ocupado}>
+            Convocar donantes
+          </button>
           <button type="button" className="btn btn-secondary btn-chico" onClick={() => setEditando(true)} disabled={ocupado}>
             Corregir cantidad
           </button>
@@ -49,6 +54,16 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, ocupado }) {
             Cerrar necesidad
           </button>
         </div>
+      )}
+
+      {convocando && (
+        <ConvocatoriaNecesidad
+          necesidad={necesidad}
+          pedir={pedir}
+          onConfirmar={(datos) => onConvocar(necesidad.idNecesidad, datos)}
+          onCancelar={() => setConvocando(false)}
+          ocupado={ocupado}
+        />
       )}
 
       {editando && (
