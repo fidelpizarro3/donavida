@@ -5,6 +5,7 @@ const { Router } = require('express');
 const prisma = require('../lib/prisma');
 const { autenticar, autorizar } = require('../middlewares/auth');
 const { datosInvalidos, GRUPOS_VALIDOS, FACTORES_VALIDOS, obtenerFechaHoy } = require('../utils/validaciones');
+const { parsearFecha } = require('../utils/formateadores');
 const {
   registrarIngresoUnidad,
   mapearUnidad,
@@ -18,6 +19,9 @@ const router = Router();
 // antes de consultar, así un valor inventado da 400 y no un error 500 de Prisma
 const ESTADOS_UNIDAD = ['disponible', 'reservada', 'usada', 'vencida', 'descartada'];
 const COMPONENTES = ['sangre_entera', 'globulos_rojos', 'plaquetas'];
+
+// Un id mal formado haría fallar a Postgres (columna uuid) con un 500: mejor un 400 claro
+const UUID_VALIDO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Una unidad como la ve la pantalla de stock: los datos de siempre más cuánto le queda.
 // "porVencer" solo aplica a las disponibles: una unidad ya usada no se tiene que apurar.
@@ -178,6 +182,57 @@ router.put('/stock-minimo', autenticar, autorizar('institucion'), async (req, re
     componente: minimo.componente,
     unidadesMinimas: minimo.unidadesMinimas,
   });
+});
+
+// PATCH /api/unidades/:idUnidadSangre/usar: la institución usa una unidad y sale del stock disponible
+router.patch('/:idUnidadSangre/usar', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({
+      error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada para usar unidades' },
+    });
+  }
+
+  const { idUnidadSangre } = req.params;
+  if (!UUID_VALIDO.test(idUnidadSangre)) {
+    return datosInvalidos(res, 'idUnidadSangre no es un identificador válido');
+  }
+
+  const hoy = obtenerFechaHoy();
+  const seUso = await prisma.$transaction(async (tx) => {
+    // Chequear y cambiar en UNA sola operación: solo cambia si la unidad es mía, está disponible
+    // y no venció. Si dos personas la usan a la vez, la segunda encuentra 0 filas y no la usa de nuevo
+    const { count } = await tx.unidadSangre.updateMany({
+      where: { idUnidadSangre, idInstitucion, estado: 'disponible', fechaVencimiento: { gte: parsearFecha(hoy) } },
+      data: { estado: 'usada' },
+    });
+    if (count === 0) return false;
+
+    await tx.movimientoUnidad.create({
+      data: {
+        idUnidadSangre,
+        tipo: 'uso',
+        estadoAnterior: 'disponible',
+        estadoNuevo: 'usada',
+        idInstitucionOrigen: idInstitucion, // sale de esta institución
+        idUsuario: req.usuario.id,
+      },
+    });
+    return true;
+  });
+
+  if (!seUso) {
+    // No se pudo: averiguamos por qué para responder el error que corresponde
+    const unidad = await prisma.unidadSangre.findFirst({ where: { idUnidadSangre, idInstitucion } });
+    if (!unidad) {
+      return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'La unidad no existe en tu institución' } });
+    }
+    const motivo = unidad.estado === 'disponible' ? 'está vencida' : `está ${unidad.estado}`;
+    return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: `La unidad no se puede usar: ${motivo}` } });
+  }
+
+  const unidad = await prisma.unidadSangre.findUnique({ where: { idUnidadSangre } });
+  res.json(mapearUnidadConVencimiento(unidad, hoy));
 });
 
 // POST /api/unidades: la institución carga UNA unidad (no una cantidad agrupada)
