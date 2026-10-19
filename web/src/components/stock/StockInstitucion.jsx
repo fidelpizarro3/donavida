@@ -13,6 +13,7 @@ const SIN_FILTROS = { grupo: '', componente: '', estado: '' }
 //   - Resumen por grupo, factor y componente, comparado con el stock mínimo
 //   - Formulario para definir el stock mínimo
 //   - Listado con filtros y el detalle (recorrido) de cada unidad
+//   - TAREA-7: confirmar el descarte de las unidades vencidas
 // Toda la comunicación con la API pasa por la función pedir().
 export function StockInstitucion({ token, apiUrl }) {
   const [resumen, setResumen] = useState([])
@@ -84,20 +85,15 @@ export function StockInstitucion({ token, apiUrl }) {
     setFiltros((prev) => ({ ...prev, [campo]: valor }))
   }
 
-  // Devuelve true si se guardó, para que el formulario sepa que salió bien
-  const guardarMinimo = async (datos) => {
+  // Ejecuta una acción (guardar un mínimo, descartar una unidad), muestra el texto que devuelve
+  // y recarga todo. Devuelve true si salió bien.
+  const ejecutar = async (accion) => {
     setOcupado(true)
     setMensaje(null)
     setError(null)
     try {
-      const guardado = await pedir('/stock-minimo', { method: 'PUT', body: JSON.stringify(datos) })
-      const grupo = GRUPOS.find((g) => g.grupoSanguineo === guardado.grupoSanguineo && g.factorRh === guardado.factorRh)
-      setMensaje(
-        guardado.unidadesMinimas === 0
-          ? `${grupo.texto} ${COMPONENTES[guardado.componente].toLowerCase()}: sin stock mínimo.`
-          : `Stock mínimo guardado: ${grupo.texto} ${COMPONENTES[guardado.componente].toLowerCase()}, ${guardado.unidadesMinimas} ${guardado.unidadesMinimas === 1 ? 'unidad' : 'unidades'}.`
-      )
-      setVersion((v) => v + 1) // recarga el resumen con el mínimo nuevo
+      setMensaje(await accion())
+      setVersion((v) => v + 1) // recarga el aviso, el resumen y el listado
       return true
     } catch (err) {
       // Por ejemplo, 403 si la institución no está aprobada: la API ya manda el mensaje
@@ -107,6 +103,22 @@ export function StockInstitucion({ token, apiUrl }) {
       setOcupado(false)
     }
   }
+
+  const guardarMinimo = (datos) =>
+    ejecutar(async () => {
+      const guardado = await pedir('/stock-minimo', { method: 'PUT', body: JSON.stringify(datos) })
+      const grupo = GRUPOS.find((g) => g.grupoSanguineo === guardado.grupoSanguineo && g.factorRh === guardado.factorRh)
+      return guardado.unidadesMinimas === 0
+        ? `${grupo.texto} ${COMPONENTES[guardado.componente].toLowerCase()}: sin stock mínimo.`
+        : `Stock mínimo guardado: ${grupo.texto} ${COMPONENTES[guardado.componente].toLowerCase()}, ${guardado.unidadesMinimas} ${guardado.unidadesMinimas === 1 ? 'unidad' : 'unidades'}.`
+    })
+
+  // TAREA-7: la institución confirma el descarte de una unidad vencida
+  const descartar = (unidad) =>
+    ejecutar(async () => {
+      await pedir(`/${unidad.idUnidadSangre}/descartar`, { method: 'POST' })
+      return `Unidad ${unidad.codigo} descartada: cerró su recorrido.`
+    })
 
   return (
     <>
@@ -127,6 +139,9 @@ export function StockInstitucion({ token, apiUrl }) {
         onCambiarFiltro={cambiarFiltro}
         cargando={cargandoUnidades}
         pedir={pedir}
+        onDescartar={descartar}
+        ocupado={ocupado}
+        version={version}
       />
     </>
   )

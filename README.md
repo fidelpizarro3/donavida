@@ -133,6 +133,7 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `GET /api/unidades/:idUnidadSangre` | Detalle de una unidad: cuándo ingresó, de dónde vino y sus movimientos |
 | `PUT /api/unidades/stock-minimo` | Define el stock mínimo de un grupo, factor y componente. Body: `{ grupoSanguineo, factorRh, componente, unidadesMinimas }` |
 | `PATCH /api/unidades/:idUnidadSangre/usar` | Usa una unidad disponible: sale del stock y queda el movimiento de uso |
+| `POST /api/unidades/:idUnidadSangre/descartar` | Confirma el descarte de una unidad vencida: pasa a descartada y queda el movimiento de descarte. Las vencidas las marca solo la API, al arrancar y cada hora |
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.

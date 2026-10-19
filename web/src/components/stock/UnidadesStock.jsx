@@ -5,9 +5,16 @@ import { DetalleUnidad } from './DetalleUnidad'
 
 // Criterios: filtros por grupo, componente y estado, y el detalle de cualquier unidad.
 // La lista viene de la que vence primero a la última. "Ver detalle" despliega el recorrido debajo de la fila.
-export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pedir }) {
+// TAREA-7: en las vencidas, "Descartar" pide confirmación debajo de la fila (no se puede deshacer).
+export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pedir, onDescartar, ocupado, version }) {
   const [abierta, setAbierta] = useState(null) // id de la unidad con el detalle desplegado
+  const [confirmando, setConfirmando] = useState(null) // id de la unidad que se está por descartar
   const hayFiltros = filtros.grupo || filtros.componente || filtros.estado
+
+  const confirmarDescarte = async (unidad) => {
+    const descartada = await onDescartar(unidad)
+    if (descartada) setConfirmando(null)
+  }
 
   return (
     <section className="card">
@@ -56,6 +63,9 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
               {unidades.map((unidad) => {
                 const estado = ESTADOS_UNIDAD[estadoVisible(unidad)]
                 const estaAbierta = abierta === unidad.idUnidadSangre
+                // También las que vencieron después de la última corrida automática: la API las marca al descartar
+                const sePuedeDescartar = estadoVisible(unidad) === 'vencida'
+                const estaConfirmando = confirmando === unidad.idUnidadSangre
                 return (
                   <Fragment key={unidad.idUnidadSangre}>
                     <tr>
@@ -73,20 +83,51 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
                         {unidad.porVencer && <span className="badge badge-warning badge-en-tabla">Por vencer</span>}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-chico"
-                          onClick={() => setAbierta(estaAbierta ? null : unidad.idUnidadSangre)}
-                          aria-expanded={estaAbierta}
-                        >
-                          {estaAbierta ? 'Ocultar' : 'Ver detalle'}
-                        </button>
+                        <div className="acciones-fila">
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-chico"
+                            onClick={() => setAbierta(estaAbierta ? null : unidad.idUnidadSangre)}
+                            aria-expanded={estaAbierta}
+                          >
+                            {estaAbierta ? 'Ocultar' : 'Ver detalle'}
+                          </button>
+                          {sePuedeDescartar && !estaConfirmando && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-chico"
+                              onClick={() => setConfirmando(unidad.idUnidadSangre)}
+                              disabled={ocupado}
+                            >
+                              Descartar
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
+                    {estaConfirmando && (
+                      <tr className="fila-detalle">
+                        <td colSpan="6">
+                          <div className="confirmar-descarte">
+                            <span>
+                              ¿Confirmás el descarte de <strong className="codigo-unidad">{unidad.codigo}</strong>? Sale del
+                              inventario y no se puede deshacer.
+                            </span>
+                            <button type="button" className="btn btn-primary btn-chico" onClick={() => confirmarDescarte(unidad)} disabled={ocupado}>
+                              {ocupado ? 'Descartando...' : 'Sí, descartar'}
+                            </button>
+                            <button type="button" className="btn btn-secondary btn-chico" onClick={() => setConfirmando(null)} disabled={ocupado}>
+                              No
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {estaAbierta && (
                       <tr className="fila-detalle">
                         <td colSpan="6">
-                          <DetalleUnidad idUnidadSangre={unidad.idUnidadSangre} pedir={pedir} />
+                          {/* La key con la versión vuelve a pedir el recorrido después de descartar */}
+                          <DetalleUnidad key={version} idUnidadSangre={unidad.idUnidadSangre} pedir={pedir} />
                         </td>
                       </tr>
                     )}
