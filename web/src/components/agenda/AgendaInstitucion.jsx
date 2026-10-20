@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { partesDeFecha, hoy } from './textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 // TAREA-10 en el front, lado del hospital: abrir franjas de atención y ver cuánto cupo les queda.
 // Una franja es un rango de atención con capacidad ("martes 8 a 11, 12 lugares"), no un turno a minuto.
@@ -79,7 +81,7 @@ export function AgendaInstitucion({ token, apiUrl }) {
         {!cargando && <span className="badge badge-info">{lugaresLibres} lugares libres</span>}
       </div>
 
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
       <form onSubmit={abrirFranja} className="agenda-form">
@@ -104,7 +106,7 @@ export function AgendaInstitucion({ token, apiUrl }) {
         </button>
       </form>
 
-      {cargando && <p className="texto-suave">Cargando...</p>}
+      {cargando && <Esqueleto />}
       {!cargando && franjas.length === 0 && (
         <div className="vacio">
           <span aria-hidden="true">🗓️</span>

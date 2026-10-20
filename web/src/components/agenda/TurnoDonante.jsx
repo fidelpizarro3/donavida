@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fechaLegible } from '../necesidades/textos'
 import { partesDeFecha, fechaLarga, enlaceMapa, guardarSinConexion, leerSinConexion } from './textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { MapaPunto } from '../comunes/MapaPunto'
 
 const CLAVE_SIN_CONEXION = 'donavida_proximo_turno'
 
@@ -120,7 +122,7 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
   const { turno, alerta, franjas } = estado
   if (cargando) return null
   if (!turno && !alerta) {
-    return mensaje ? <div className="alert alert-success">{mensaje}</div> : null
+    return <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
   }
 
   const otrasFranjas = turno ? franjas.filter((f) => !(f.fecha === turno.fecha && f.horaInicio === turno.horaInicio)) : []
@@ -152,7 +154,7 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
 
   return (
     <section className="card">
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
       {turno && (() => {
@@ -177,6 +179,11 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
                 )}
               </div>
             </div>
+
+            {/* El mapa necesita internet: sin conexión queda el botón "Cómo llegar" para cuando vuelva */}
+            {!sinConexion && turno.institucion && (
+              <MapaPunto latitud={turno.institucion.latitud} longitud={turno.institucion.longitud} nombre={turno.institucion.nombre} />
+            )}
 
             <ul className="consejos">
               <li>💧 Tomá mucha agua el día anterior</li>

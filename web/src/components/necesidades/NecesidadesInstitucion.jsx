@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { FormularioNecesidad } from './FormularioNecesidad'
 import { TarjetaNecesidad } from './TarjetaNecesidad'
 import { ESTADOS } from './textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 // TAREA-4 en el front: publicar, ver, corregir y cerrar las necesidades de la institución.
 // TAREA-8: convocar donantes para una necesidad abierta.
@@ -87,7 +89,7 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
 
   return (
     <>
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
       <FormularioNecesidad onPublicar={publicar} publicando={ocupado} />
@@ -103,7 +105,7 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
           </select>
         </div>
 
-        {cargando && <p className="texto-suave">Cargando...</p>}
+        {cargando && <Esqueleto />}
         {!cargando && necesidades.length === 0 && (
           <p className="texto-suave">No hay necesidades {filtro ? 'con ese estado' : 'publicadas todavía'}.</p>
         )}

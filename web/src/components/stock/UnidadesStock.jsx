@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { COMPONENTES, grupoConFactor, fechaLegible } from '../necesidades/textos'
 import { ESTADOS_UNIDAD, GRUPOS, COMPONENTES_STOCK, estadoVisible, textoDiasRestantes } from './textos'
 import { DetalleUnidad } from './DetalleUnidad'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 // Criterios: filtros por grupo, componente y estado, y el detalle de cualquier unidad.
 // La lista viene de la que vence primero a la última. "Ver detalle" despliega el recorrido debajo de la fila.
@@ -41,7 +42,7 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
         </select>
       </div>
 
-      {cargando && <p className="texto-suave">Cargando...</p>}
+      {cargando && <Esqueleto />}
       {!cargando && unidades.length === 0 && (
         <p className="texto-suave">{hayFiltros ? 'No hay unidades con esos filtros.' : 'Todavía no hay unidades cargadas.'}</p>
       )}

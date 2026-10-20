@@ -137,7 +137,7 @@ export default function App() {
       </header>
 
       {vista === 'inicio' && !token && (
-        <Inicio onRegistrarse={() => irA('registro')} onIngresar={() => irA('login')} />
+        <Inicio onRegistrarse={() => irA('registro')} onIngresar={() => irA('login')} apiUrl={API_URL} />
       )}
 
       {vista !== 'inicio' && (

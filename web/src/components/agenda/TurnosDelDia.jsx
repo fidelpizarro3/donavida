@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fechaLarga, hoy, sumarDias, ESTADOS_TURNO, RESULTADOS_DONACION } from './textos'
 import { grupoConFactor } from '../necesidades/textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 // DV-11 en el front, lado del hospital: los turnos del día y qué pasó con cada uno.
 // Al marcar "Donó", la unidad entra sola al stock y el donante arranca su período de espera.
@@ -97,9 +99,9 @@ export function TurnosDelDia({ token, apiUrl }) {
         {fecha !== hoy() && <button type="button" className="btn-link" onClick={() => cambiarDia(hoy())}>Volver a hoy</button>}
       </div>
 
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
-      {cargando && <p className="texto-suave">Cargando...</p>}
+      {cargando && <Esqueleto />}
       {!cargando && turnos.length === 0 && (
         <div className="vacio">
           <span aria-hidden="true">🩸</span>

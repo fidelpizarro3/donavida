@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FormularioAltaInstitucion } from './FormularioAltaInstitucion'
 import { TarjetaInstitucion } from './TarjetaInstitucion'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 // TAREA-1 en el front: alta, estado y usuarios de las instituciones del usuario logueado.
 // Toda la comunicación con la API pasa por la función pedir().
@@ -69,10 +71,10 @@ export function DatosInstitucion({ token, apiUrl }) {
     <section className="card">
       <h3 style={{ margin: 0 }}>Mi institución</h3>
 
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
-      {cargando && <p className="texto-suave">Cargando...</p>}
+      {cargando && <Esqueleto />}
 
       {!cargando && instituciones.length === 0 && (
         <FormularioAltaInstitucion onDarDeAlta={darDeAlta} ocupado={ocupado} />

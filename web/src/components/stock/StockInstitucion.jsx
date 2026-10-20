@@ -5,6 +5,7 @@ import { FormularioStockMinimo } from './FormularioStockMinimo'
 import { UnidadesStock } from './UnidadesStock'
 import { COMPONENTES } from '../necesidades/textos'
 import { GRUPOS } from './textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
 
 const SIN_FILTROS = { grupo: '', componente: '', estado: '' }
 
@@ -122,7 +123,7 @@ export function StockInstitucion({ token, apiUrl }) {
 
   return (
     <>
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
       <section className="card">
