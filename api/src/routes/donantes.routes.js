@@ -2,6 +2,8 @@ const { Router } = require('express');
 const prisma = require('../lib/prisma');
 const { autenticar, autorizar } = require('../middlewares/auth');
 const {
+  GRUPOS_VALIDOS,
+  FACTORES_VALIDOS,
   validarHorarioContacto,
   validarUbicacion,
   esFechaValida,
@@ -72,9 +74,9 @@ router.get('/perfil', autenticar, autorizar('donante'), async (req, res) => {
 const CANALES_AVISO = ['avisoPush', 'avisoEmail', 'avisoWhatsapp'];
 
 // PATCH /api/donantes/perfil: permite actualizar horarios de contacto, pausar alertas,
-// elegir por dónde recibir los avisos y cargar la ubicación
+// elegir por dónde recibir los avisos, cargar la ubicación y declarar el grupo sanguíneo (una sola vez)
 router.patch('/perfil', autenticar, autorizar('donante'), async (req, res) => {
-  const { contactoHoraDesde, contactoHoraHasta, alertasPausadasHasta, latitud, longitud } = req.body ?? {};
+  const { contactoHoraDesde, contactoHoraHasta, alertasPausadasHasta, latitud, longitud, grupoSanguineo, factorRh } = req.body ?? {};
 
   // Criterio 2: los horarios se envían juntos (también para borrarlos, ambos en null),
   // así nunca queda un horario a medias
@@ -117,6 +119,13 @@ router.patch('/perfil', autenticar, autorizar('donante'), async (req, res) => {
     }
   }
 
+  // Grupo sanguíneo: el que no lo sabía al registrarse lo puede declarar después, grupo y factor juntos.
+  // Una sola vez: si ya estaba cargado (en el registro, acá o por una donación), no se puede cambiar
+  const declaraGrupo = grupoSanguineo !== undefined || factorRh !== undefined;
+  if (declaraGrupo && (!GRUPOS_VALIDOS.includes(grupoSanguineo) || !FACTORES_VALIDOS.includes(factorRh))) {
+    return datosInvalidos(res, 'Indicá grupoSanguineo (A, B, AB u O) y factorRh (positivo o negativo) juntos');
+  }
+
   const dataUpdate = {};
   if (cambiaUbicacion) {
     dataUpdate.latitud = latitud;
@@ -135,23 +144,47 @@ router.patch('/perfil', autenticar, autorizar('donante'), async (req, res) => {
     dataUpdate.alertasPausadasHasta = alertasPausadasHasta ? parsearFecha(alertasPausadasHasta) : null;
   }
 
-  try {
-    const donanteActualizado = await prisma.donante.update({
-      where: { idUsuario: req.usuario.id },
-      data: dataUpdate,
-      include: {
-        usuario: {
-          select: {
-            idUsuario: true,
-            email: true,
-            nombre: true,
-            apellido: true,
-            rol: true,
-            emailVerificado: true,
-          },
+  const actualizar = (db) => db.donante.update({
+    where: { idUsuario: req.usuario.id },
+    data: dataUpdate,
+    include: {
+      usuario: {
+        select: {
+          idUsuario: true,
+          email: true,
+          nombre: true,
+          apellido: true,
+          rol: true,
+          emailVerificado: true,
         },
       },
-    });
+    },
+  });
+
+  try {
+    let donanteActualizado;
+    if (declaraGrupo) {
+      donanteActualizado = await prisma.$transaction(async (tx) => {
+        // Se guarda solo si todavía no tenía grupo, chequeando y cambiando en UNA operación:
+        // dos pedidos a la vez no pueden cargar dos grupos distintos
+        const { count } = await tx.donante.updateMany({
+          where: { idUsuario: req.usuario.id, grupoSanguineo: null },
+          data: { grupoSanguineo, factorRh },
+        });
+        return count === 0 ? null : actualizar(tx);
+      });
+      if (!donanteActualizado) {
+        const existe = await prisma.donante.findUnique({ where: { idUsuario: req.usuario.id } });
+        if (!existe) {
+          return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Perfil de donante no encontrado' } });
+        }
+        return res.status(409).json({
+          error: { codigo: 'CONFLICTO', mensaje: 'Tu grupo sanguíneo ya está cargado y no se puede cambiar' },
+        });
+      }
+    } else {
+      donanteActualizado = await actualizar(prisma);
+    }
 
     res.json(mapearPerfilDonante(donanteActualizado));
   } catch (err) {

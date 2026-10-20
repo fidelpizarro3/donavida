@@ -5,6 +5,7 @@ import { UbicacionYAvisos } from './UbicacionYAvisos'
 import { TurnoDonante } from './agenda/TurnoDonante'
 import { HistorialDonante } from './agenda/HistorialDonante'
 import { AvisoFlotante } from './comunes/AvisoFlotante'
+import { DeclararGrupo } from './DeclararGrupo'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -239,9 +240,13 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
                   {perfil.grupoSanguineo} {perfil.factorRh === 'positivo' ? '(+)' : '(-)'}
                 </span>
               ) : (
-                <span className="badge badge-warning" style={{ fontSize: '0.85rem' }}>
-                  Pendiente (se completa en tu 1ra donación)
-                </span>
+                <>
+                  <span className="badge badge-warning" style={{ fontSize: '0.85rem' }}>
+                    Pendiente (se completa en tu 1ra donación)
+                  </span>
+                  {/* Si no lo sabía al registrarse, lo puede declarar una sola vez */}
+                  <DeclararGrupo guardar={guardarPerfil} />
+                </>
               )}
             </div>
           </div>
