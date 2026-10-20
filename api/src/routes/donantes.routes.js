@@ -3,6 +3,7 @@ const prisma = require('../lib/prisma');
 const { autenticar, autorizar } = require('../middlewares/auth');
 const {
   validarHorarioContacto,
+  validarUbicacion,
   esFechaValida,
   esFechaFuturaOPresente,
   datosInvalidos,
@@ -35,6 +36,9 @@ function mapearPerfilDonante(donante) {
     avisoPush: donante.avisoPush,
     avisoEmail: donante.avisoEmail,
     avisoWhatsapp: donante.avisoWhatsapp,
+    // Ubicación para calcular la distancia en las convocatorias (Prisma devuelve Decimal: se pasa a número)
+    latitud: donante.latitud == null ? null : Number(donante.latitud),
+    longitud: donante.longitud == null ? null : Number(donante.longitud),
     topeAlertasMes: donante.topeAlertasMes,
     aptoDesde: formatearFecha(donante.aptoDesde),
   };
@@ -65,9 +69,12 @@ router.get('/perfil', autenticar, autorizar('donante'), async (req, res) => {
   res.json(mapearPerfilDonante(donante));
 });
 
-// PATCH /api/donantes/perfil: permite actualizar horarios de contacto y pausar alertas
+const CANALES_AVISO = ['avisoPush', 'avisoEmail', 'avisoWhatsapp'];
+
+// PATCH /api/donantes/perfil: permite actualizar horarios de contacto, pausar alertas,
+// elegir por dónde recibir los avisos y cargar la ubicación
 router.patch('/perfil', autenticar, autorizar('donante'), async (req, res) => {
-  const { contactoHoraDesde, contactoHoraHasta, alertasPausadasHasta } = req.body ?? {};
+  const { contactoHoraDesde, contactoHoraHasta, alertasPausadasHasta, latitud, longitud } = req.body ?? {};
 
   // Criterio 2: los horarios se envían juntos (también para borrarlos, ambos en null),
   // así nunca queda un horario a medias
@@ -92,7 +99,32 @@ router.patch('/perfil', autenticar, autorizar('donante'), async (req, res) => {
     }
   }
 
+  // Ubicación: latitud y longitud van juntas (ambas en null para borrarla)
+  const cambiaUbicacion = latitud !== undefined || longitud !== undefined;
+  if (cambiaUbicacion) {
+    const errorUbicacion = latitud === undefined || longitud === undefined
+      ? 'Debes enviar latitud y longitud juntas (o ambas en null para borrarlas)'
+      : validarUbicacion(latitud, longitud);
+    if (errorUbicacion) {
+      return datosInvalidos(res, errorUbicacion);
+    }
+  }
+
+  // Canales de aviso: el donante elige por dónde le llegan las alertas (TAREA-11 los respeta)
+  for (const canal of CANALES_AVISO) {
+    if (req.body?.[canal] !== undefined && typeof req.body[canal] !== 'boolean') {
+      return datosInvalidos(res, `${canal} debe ser true o false`);
+    }
+  }
+
   const dataUpdate = {};
+  if (cambiaUbicacion) {
+    dataUpdate.latitud = latitud;
+    dataUpdate.longitud = longitud;
+  }
+  for (const canal of CANALES_AVISO) {
+    if (req.body?.[canal] !== undefined) dataUpdate[canal] = req.body[canal];
+  }
   if (contactoHoraDesde !== undefined) {
     dataUpdate.contactoHoraDesde = contactoHoraDesde ? parsearHora(contactoHoraDesde) : null;
   }

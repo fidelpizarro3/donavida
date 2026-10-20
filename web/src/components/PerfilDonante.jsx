@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AptitudDonante } from './AptitudDonante'
 import { MisAlertas } from './alertas/MisAlertas'
+import { UbicacionYAvisos } from './UbicacionYAvisos'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -54,6 +55,32 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
       activo = false
     }
   }, [apiUrl, token])
+
+  // Ubicación y canales de aviso: hace el PATCH y muestra el resultado. Devuelve true si se guardó
+  const guardarPerfil = async (datos, textoExito) => {
+    setMensaje(null)
+    setError(null)
+    try {
+      const res = await fetch(`${apiUrl}/api/donantes/perfil`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(datos),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error?.mensaje || 'Error al guardar')
+      }
+      setPerfil(data)
+      setMensaje(textoExito)
+      return true
+    } catch (err) {
+      setError(err.message)
+      return false
+    }
+  }
 
   // Criterio 2: Elige horarios de contacto preferidos
   const handleGuardarHorarios = async (e) => {
@@ -221,6 +248,9 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
 
       {/* TAREA-3: habilitación para donar y cuestionario de aptitud */}
       <AptitudDonante token={token} apiUrl={apiUrl} idDonante={perfil.idDonante} />
+
+      {/* Ubicación y canales de aviso (los usan la convocatoria y las alertas) */}
+      <UbicacionYAvisos perfil={perfil} guardar={guardarPerfil} />
 
       {/* Criterio 2: Horarios preferidos de contacto */}
       <div className="card">

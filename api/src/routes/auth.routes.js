@@ -13,6 +13,7 @@ const {
   normalizarDocumento,
   esDocumentoValido,
   validarHorarioContacto,
+  validarUbicacion,
   esFechaNacimientoValida,
   datosInvalidos,
 } = require('../utils/validaciones');
@@ -88,6 +89,8 @@ router.post('/registro', async (req, res) => {
     factorRh,
     contactoHoraDesde,
     contactoHoraHasta,
+    latitud,
+    longitud,
   } = req.body ?? {};
 
   // Validaciones comunes de usuario
@@ -139,6 +142,12 @@ router.post('/registro', async (req, res) => {
     if (errorHorario) {
       return datosInvalidos(res, errorHorario);
     }
+
+    // Ubicación (opcional): sin ella el donante no puede entrar en una convocatoria (TAREA-10)
+    const errorUbicacion = validarUbicacion(latitud, longitud);
+    if (errorUbicacion) {
+      return datosInvalidos(res, errorUbicacion);
+    }
   }
 
   try {
@@ -169,6 +178,8 @@ router.post('/registro', async (req, res) => {
             factorRh: factorRh || null,
             contactoHoraDesde: contactoHoraDesde ? parsearHora(contactoHoraDesde) : null,
             contactoHoraHasta: contactoHoraHasta ? parsearHora(contactoHoraHasta) : null,
+            latitud: latitud ?? null,
+            longitud: longitud ?? null,
           },
         });
       }
