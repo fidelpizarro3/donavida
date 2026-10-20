@@ -10,7 +10,8 @@ const ESTADOS_ALERTA = {
 
 // TAREA-11 en el front: el donante ve las alertas que le llegaron (motivo, hospital y distancia)
 // y las acepta o rechaza. Al aceptar, el próximo paso es reservar un turno (TAREA-10).
-export function MisAlertas({ token, apiUrl }) {
+// onRespondida (opcional): avisa al perfil cuando se acepta o rechaza, para que la agenda (TAREA-10) se actualice
+export function MisAlertas({ token, apiUrl, onRespondida }) {
   const [alertas, setAlertas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [ocupado, setOcupado] = useState(false)
@@ -48,6 +49,7 @@ export function MisAlertas({ token, apiUrl }) {
       const datos = await pedir(`/${idAlerta}/${accion}`, { method: 'POST' })
       setMensaje(accion === 'aceptar' ? `¡Gracias! ${datos.siguientePaso}.` : 'Listo, no te vamos a esperar esta vez.')
       setVersion((v) => v + 1)
+      onRespondida?.()
     } catch (err) {
       setError(err.message)
     } finally {
