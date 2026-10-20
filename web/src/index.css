@@ -2041,3 +2041,34 @@ input[type='radio'] {
     width: 4.5rem;
   }
 }
+
+/* ─── Declarar el grupo sanguíneo desde el perfil (una sola vez) ─────────── */
+
+.declarar-grupo-abrir {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.declarar-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.declarar-grupo-campos,
+.declarar-grupo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.declarar-grupo-campos select {
+  flex: 1 1 7rem;
+}
+
+.declarar-grupo-aviso {
+  color: var(--warning);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
