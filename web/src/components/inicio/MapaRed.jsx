@@ -7,13 +7,15 @@ import { COMPONENTES, grupoConFactor } from '../necesidades/textos'
 // Centro por defecto si todavía no hay instituciones: Neuquén
 const CENTRO_POR_DEFECTO = [-38.9516, -68.0591]
 
-// Encuadra el mapa para que entren todas las instituciones
+// Encuadra el mapa para que entren todas las instituciones.
+// Sin animación: si el usuario sale de la portada mientras el mapa anima el zoom, Leaflet intenta mover
+// un mapa que ya no existe y tira "Cannot read properties of undefined (reading '_leaflet_pos')"
 function Encuadrar({ puntos }) {
   const mapa = useMap()
   const clave = puntos.map((p) => p.join(',')).join('|')
   useEffect(() => {
-    if (puntos.length === 1) mapa.setView(puntos[0], 13)
-    if (puntos.length > 1) mapa.fitBounds(puntos, { padding: [40, 40], maxZoom: 14 })
+    if (puntos.length === 1) mapa.setView(puntos[0], 13, { animate: false })
+    if (puntos.length > 1) mapa.fitBounds(puntos, { padding: [40, 40], maxZoom: 14, animate: false })
     // Solo cuando cambian los puntos, no en cada actualización en vivo
   }, [mapa, clave]) // eslint-disable-line react-hooks/exhaustive-deps
   return null
