@@ -1,4 +1,10 @@
-// Portal de inicio: lo primero que ve quien entra sin sesión
+import { NecesidadesEnVivo } from './inicio/NecesidadesEnVivo'
+import { Contadores } from './inicio/Contadores'
+import { MapaRed } from './inicio/MapaRed'
+import { Compatibilidad } from './inicio/Compatibilidad'
+
+// Portal de inicio: lo primero que ve quien entra sin sesión.
+// La tarjeta, los contadores y el mapa muestran datos REALES de la red y se actualizan solos (en vivo).
 const PASOS = [
   { titulo: 'Registrate', texto: 'Cargá tus datos en dos minutos. Si no sabés tu grupo sanguíneo, se completa en tu primera donación.' },
   { titulo: 'Activá tu cuenta', texto: 'Confirmás tu cuenta y elegís en qué horarios querés que te contactemos.' },
@@ -6,13 +12,7 @@ const PASOS = [
   { titulo: 'Doná', texto: 'Reservás un turno, vas con tu código QR y tu donación queda registrada en tu carné.' },
 ]
 
-const DATOS = [
-  { numero: '3', texto: 'personas pueden recibir ayuda de una sola donación' },
-  { numero: '8', texto: 'tipos de sangre combinando grupo y factor Rh' },
-  { numero: '56', texto: 'días de descanso entre donaciones de sangre entera' },
-]
-
-export function Inicio({ onRegistrarse, onIngresar }) {
+export function Inicio({ onRegistrarse, onIngresar, apiUrl }) {
   return (
     <div className="inicio">
       <section className="hero">
@@ -35,39 +35,29 @@ export function Inicio({ onRegistrarse, onIngresar }) {
           </div>
         </div>
 
-        {/* Ilustración: así se ve una necesidad publicada por un hospital */}
-        <div className="hero-visual" aria-hidden="true">
-          <div className="necesidad-demo">
-            <div className="necesidad-demo-cabecera">
-              <span className="grupo-chip">O−</span>
-              <div>
-                <strong>Hospital Central</strong>
-                <small>Glóbulos rojos · a 4,2 km</small>
-              </div>
-              <span className="badge badge-urgente">Urgente</span>
-            </div>
-            <div className="progreso">
-              <div className="progreso-barra" style={{ width: '66%' }} />
-            </div>
-            <div className="necesidad-demo-pie">
-              <span><strong>4</strong> de 6 unidades cubiertas</span>
-              <span>Faltan <strong>2</strong></span>
-            </div>
-          </div>
-          <div className="aviso-flotante">
-            <span className="punto-vivo" />
-            Alerta enviada a 12 donantes compatibles
-          </div>
+        {/* Las necesidades REALES de la red, en vivo (se actualizan cada 15 segundos) */}
+        <div className="hero-visual">
+          <NecesidadesEnVivo apiUrl={apiUrl} />
         </div>
       </section>
 
-      <section className="datos">
-        {DATOS.map((dato) => (
-          <div key={dato.numero} className="dato">
-            <span className="dato-numero">{dato.numero}</span>
-            <span className="dato-texto">{dato.texto}</span>
-          </div>
-        ))}
+      <Contadores apiUrl={apiUrl} />
+
+      <section className="seccion">
+        <div className="seccion-cabecera">
+          <h2 className="seccion-titulo">La red en este momento</h2>
+          <span className="en-vivo"><span className="punto-vivo" /> En vivo</span>
+        </div>
+        <MapaRed apiUrl={apiUrl} />
+      </section>
+
+      <section className="seccion">
+        <h2 className="seccion-titulo">¿A quién le podés donar?</h2>
+        <p className="seccion-bajada">
+          Una sola donación puede ayudar hasta a 3 personas, y después de donar se descansan 56 días.
+          Elegí tu grupo y mirá a quiénes les servís.
+        </p>
+        <Compatibilidad />
       </section>
 
       <section className="seccion">

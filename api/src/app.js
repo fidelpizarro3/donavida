@@ -13,6 +13,7 @@ const unidadesRoutes = require('./routes/unidades.routes');
 const franjasRoutes = require('./routes/franjas.routes');
 const turnosRoutes = require('./routes/turnos.routes');
 const donacionesRoutes = require('./routes/donaciones.routes');
+const publicoRoutes = require('./routes/publico.routes');
 
 const app = express();
 app.use(cors());
@@ -31,6 +32,7 @@ app.use('/api/unidades', unidadesRoutes); // ingreso de unidades de sangre (TARE
 app.use('/api/franjas', franjasRoutes); // agenda de la institución (TAREA-10)
 app.use('/api/turnos', turnosRoutes); // reserva de turnos del donante (TAREA-10)
 app.use('/api/donaciones', donacionesRoutes); // registro de la donación e historial (DV-11)
+app.use('/api/publico', publicoRoutes); // datos de la página de inicio, sin login
 
 // Express 5 manda acá también los errores de las rutas async, sin necesidad de try/catch
 app.use((err, req, res, next) => {

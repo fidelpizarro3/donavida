@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ActivarAvisos } from './ActivarAvisos'
 import { COMPONENTES, CANALES, grupoConFactor, fechaLegible } from '../necesidades/textos'
+import { AvisoFlotante } from '../comunes/AvisoFlotante'
+import { Esqueleto } from '../comunes/Esqueleto'
 
 const ESTADOS_ALERTA = {
   enviada: { texto: 'Sin responder', clase: 'badge-info' },
@@ -68,9 +70,9 @@ export function MisAlertas({ token, apiUrl, onRespondida }) {
 
       <ActivarAvisos token={token} apiUrl={apiUrl} />
 
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
-      {cargando && <p className="texto-suave">Cargando...</p>}
+      {cargando && <Esqueleto />}
       {!cargando && alertas.length === 0 && (
         <p className="texto-suave">Todavía no te llegó ninguna alerta. Cuando una institución te necesite, te avisamos.</p>
       )}

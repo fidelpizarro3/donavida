@@ -4,6 +4,7 @@ import { MisAlertas } from './alertas/MisAlertas'
 import { UbicacionYAvisos } from './UbicacionYAvisos'
 import { TurnoDonante } from './agenda/TurnoDonante'
 import { HistorialDonante } from './agenda/HistorialDonante'
+import { AvisoFlotante } from './comunes/AvisoFlotante'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -200,7 +201,7 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
 
   return (
     <div>
-      {mensaje && <div className="alert alert-success">{mensaje}</div>}
+      <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
       {/* Tarjeta de Datos Personales */}

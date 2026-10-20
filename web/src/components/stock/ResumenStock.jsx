@@ -1,9 +1,10 @@
+import { Esqueleto } from '../comunes/Esqueleto'
 import { COMPONENTES, grupoConFactor } from '../necesidades/textos'
 
 // Criterio: totales por grupo + factor y por componente (disponibles, por vencer, usadas, vencidas),
 // con el stock mínimo de la institución y un aviso si está por debajo.
 export function ResumenStock({ filas, cargando }) {
-  if (cargando) return <p className="texto-suave">Cargando...</p>
+  if (cargando) return <Esqueleto filas={2} />
   if (filas.length === 0) {
     return <p className="texto-suave">Todavía no hay unidades cargadas ni mínimos definidos.</p>
   }
