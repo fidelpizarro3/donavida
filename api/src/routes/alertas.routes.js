@@ -15,7 +15,7 @@ const DATOS_ALERTA = {
     convocatoria: {
         include: {
             necesidad: {
-                include: { institucion: { select: { idInstitucion: true, nombre: true, direccion: true } } },
+                include: { institucion: { select: { idInstitucion: true, nombre: true, direccion: true, latitud: true, longitud: true } } },
             },
         },
     },
@@ -41,7 +41,12 @@ function mapearAlerta(alerta) {
         respondidaEn: alerta.respondidaEn,
         // Solo se puede responder si todavía no respondió y la necesidad sigue abierta
         puedeResponder: alerta.estado === 'enviada' && necesidad.estado === 'abierta',
-        institucion: necesidad.institucion,
+        institucion: {
+            ...necesidad.institucion,
+            // Para el botón "cómo llegar" (Prisma devuelve Decimal: se pasa a número)
+            latitud: necesidad.institucion.latitud == null ? null : Number(necesidad.institucion.latitud),
+            longitud: necesidad.institucion.longitud == null ? null : Number(necesidad.institucion.longitud),
+        },
         necesidad: {
             grupoSanguineo: necesidad.grupoSanguineo,
             factorRh: necesidad.factorRh,

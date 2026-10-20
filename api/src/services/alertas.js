@@ -153,6 +153,7 @@ async function enviarAlertasDeConvocatoria(idConvocatoria) {
 
 module.exports = {
   PUSH_CONFIGURADO,
+  enviarPush, // también lo usa el recordatorio del turno (TAREA-10)
   inicioDelMes,
   alertasEnviadasEsteMes,
   enviarAlertasDeConvocatoria,

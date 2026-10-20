@@ -3,6 +3,7 @@ import { AptitudDonante } from './AptitudDonante'
 import { MisAlertas } from './alertas/MisAlertas'
 import { UbicacionYAvisos } from './UbicacionYAvisos'
 import { TurnoDonante } from './agenda/TurnoDonante'
+import { HistorialDonante } from './agenda/HistorialDonante'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -249,6 +250,9 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
       {/* TAREA-11: alertas de las instituciones que lo convocaron */}
       <MisAlertas token={token} apiUrl={apiUrl} onRespondida={() => setAlertasRespondidas((n) => n + 1)} />
       <TurnoDonante token={token} apiUrl={apiUrl} actualizar={alertasRespondidas} />
+
+      {/* DV-11: dónde donó, cuándo y desde qué fecha puede volver */}
+      <HistorialDonante token={token} apiUrl={apiUrl} actualizar={alertasRespondidas} />
 
       {/* TAREA-3: habilitación para donar y cuestionario de aptitud */}
       <AptitudDonante token={token} apiUrl={apiUrl} idDonante={perfil.idDonante} />
