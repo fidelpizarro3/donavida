@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { AptitudDonante } from './AptitudDonante'
 import { MisAlertas } from './alertas/MisAlertas'
 import { UbicacionYAvisos } from './UbicacionYAvisos'
+import { TurnoDonante } from './agenda/TurnoDonante'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -18,6 +19,8 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
   const [guardandoAlertas, setGuardandoAlertas] = useState(false)
   const [mensaje, setMensaje] = useState(null)
   const [error, setError] = useState(null)
+  // Cambia cuando el donante responde una alerta: le avisa a la sección del turno que vuelva a mirar
+  const [alertasRespondidas, setAlertasRespondidas] = useState(0)
 
   // Estados locales editables
   const [horaDesde, setHoraDesde] = useState('')
@@ -244,7 +247,8 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
       </div>
 
       {/* TAREA-11: alertas de las instituciones que lo convocaron */}
-      <MisAlertas token={token} apiUrl={apiUrl} />
+      <MisAlertas token={token} apiUrl={apiUrl} onRespondida={() => setAlertasRespondidas((n) => n + 1)} />
+      <TurnoDonante token={token} apiUrl={apiUrl} actualizar={alertasRespondidas} />
 
       {/* TAREA-3: habilitación para donar y cuestionario de aptitud */}
       <AptitudDonante token={token} apiUrl={apiUrl} idDonante={perfil.idDonante} />
