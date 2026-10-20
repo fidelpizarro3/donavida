@@ -48,6 +48,25 @@ function validarHorarioContacto(desde, hasta) {
   return null;
 }
 
+// Ubicación del donante (opcional): latitud y longitud van juntas, o ninguna de las dos.
+// La usa la convocatoria (TAREA-10/DV-8) para calcular la distancia al hospital.
+function validarUbicacion(latitud, longitud) {
+  const tieneLatitud = latitud !== undefined && latitud !== null;
+  const tieneLongitud = longitud !== undefined && longitud !== null;
+  if (tieneLatitud !== tieneLongitud) {
+    return 'Debes indicar latitud y longitud juntas, o bien omitir ambas';
+  }
+  if (!tieneLatitud) return null;
+  const esNumero = (n) => typeof n === 'number' && Number.isFinite(n);
+  if (!esNumero(latitud) || latitud < -90 || latitud > 90) {
+    return 'La latitud debe ser un número entre -90 y 90';
+  }
+  if (!esNumero(longitud) || longitud < -180 || longitud > 180) {
+    return 'La longitud debe ser un número entre -180 y 180';
+  }
+  return null;
+}
+
 function esFechaValida(fecha) {
   if (fecha === null || fecha === undefined) return true;
   if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
@@ -113,6 +132,7 @@ module.exports = {
   esDocumentoValido,
   esHoraValida,
   validarHorarioContacto,
+  validarUbicacion,
   esFechaValida,
   obtenerFechaHoy,
   obtenerFechaHoyArgentina,

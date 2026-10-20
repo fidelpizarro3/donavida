@@ -10,6 +10,7 @@ const prisma = require('../lib/prisma');
 const { filtroDonantesHabilitados } = require('./habilitacion');
 const { gruposCompatibles, esGrupoExacto } = require('./compatibilidad');
 const { distanciaKm } = require('./distancia');
+const { inicioDelMes } = require('./alertas');
 const { obtenerFechaHoy } = require('../utils/validaciones');
 const { parsearFecha } = require('../utils/formateadores');
 
@@ -59,12 +60,16 @@ async function buscarCandidatos(necesidad, institucion, radioKm) {
         { OR: [{ alertasPausadasHasta: null }, { alertasPausadasHasta: { lt: hoy } }] },
       ],
     },
-    include: { usuario: { select: { nombre: true, apellido: true } } },
+    include: {
+      usuario: { select: { nombre: true, apellido: true } },
+      // Cuántas alertas ya recibió este mes (para el tope, TAREA-11)
+      _count: { select: { alertas: { where: { enviadaEn: { gte: inicioDelMes() } } } } },
+    },
   });
 
   const candidatos = [];
   for (const donante of donantes) {
-    if (donante.alertasMesActual >= donante.topeAlertasMes) continue; // llegó a su tope del mes
+    if (donante._count.alertas >= donante.topeAlertasMes) continue; // llegó a su tope del mes
     const canal = elegirCanal(donante, necesidad.urgencia);
     if (!canal) continue;
 

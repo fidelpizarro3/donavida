@@ -1,6 +1,24 @@
 import { useState } from 'react'
+import { pedirUbicacion } from './ubicacion'
 
 export function RegistroDonante({ onRegistroExitoso, onIrALogin, apiUrl }) {
+  // Ubicación (opcional): { latitud, longitud } o null. Sin ella no entra en las convocatorias
+  const [ubicacion, setUbicacion] = useState(null)
+  const [buscandoUbicacion, setBuscandoUbicacion] = useState(false)
+  const [errorUbicacion, setErrorUbicacion] = useState(null)
+
+  const handleUsarUbicacion = async () => {
+    setBuscandoUbicacion(true)
+    setErrorUbicacion(null)
+    try {
+      setUbicacion(await pedirUbicacion())
+    } catch (err) {
+      setErrorUbicacion(err.message)
+    } finally {
+      setBuscandoUbicacion(false)
+    }
+  }
+
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
@@ -45,6 +63,8 @@ export function RegistroDonante({ onRegistroExitoso, onIrALogin, apiUrl }) {
       factorRh: formData.sabeGrupo ? formData.factorRh : null,
       contactoHoraDesde: formData.contactoHoraDesde || null,
       contactoHoraHasta: formData.contactoHoraHasta || null,
+      latitud: ubicacion?.latitud ?? null,
+      longitud: ubicacion?.longitud ?? null,
     }
 
     try {
@@ -244,6 +264,22 @@ export function RegistroDonante({ onRegistroExitoso, onIrALogin, apiUrl }) {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Ubicación: para avisarte cuando un hospital cercano necesite tu sangre */}
+          <div className="form-group full-width" style={{ marginTop: '0.5rem' }}>
+            <strong>Tu ubicación (recomendado)</strong>
+            <p className="texto-suave" style={{ margin: '0.25rem 0 0.5rem' }}>
+              La usamos para avisarte cuando un hospital cercano necesite tu sangre. Podés cambiarla después desde tu perfil.
+            </p>
+            {ubicacion ? (
+              <span className="badge badge-success">📍 Ubicación cargada</span>
+            ) : (
+              <button type="button" className="btn btn-secondary btn-chico" onClick={handleUsarUbicacion} disabled={buscandoUbicacion}>
+                {buscandoUbicacion ? 'Buscando...' : '📍 Usar mi ubicación actual'}
+              </button>
+            )}
+            {errorUbicacion && <div className="alert alert-danger" style={{ marginTop: '0.5rem' }}>{errorUbicacion}</div>}
           </div>
         </div>
 

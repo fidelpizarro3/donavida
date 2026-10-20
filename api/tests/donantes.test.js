@@ -425,6 +425,94 @@ describe('TAREA-2: Registro del donante y su perfil', () => {
     });
   });
 
+  describe('Ubicación y canales de aviso (los usan TAREA-10 y TAREA-11)', () => {
+    const patchPerfil = (body) =>
+      request(app).patch('/api/donantes/perfil').set('Authorization', `Bearer ${tokenDonanteValido}`).send(body);
+    // Lo que se le pidió guardar a la base en el último PATCH
+    const datosGuardados = () => prisma.donante.update.mock.calls.at(-1)[0].data;
+
+    beforeEach(() => {
+      prisma.donante.update.mockReset();
+      prisma.donante.update.mockImplementation(async ({ data }) => ({
+        idDonante: '22222222-2222-2222-2222-222222222222',
+        idUsuario: '11111111-1111-1111-1111-111111111111',
+        documento: '35123456',
+        fechaNacimiento: new Date('1990-06-15T00:00:00.000Z'),
+        sexo: 'masculino',
+        grupoSanguineo: null,
+        factorRh: null,
+        contactoHoraDesde: null,
+        contactoHoraHasta: null,
+        alertasPausadasHasta: null,
+        avisoPush: true,
+        avisoEmail: true,
+        avisoWhatsapp: false,
+        latitud: null,
+        longitud: null,
+        topeAlertasMes: 4,
+        aptoDesde: null,
+        usuario: { email: 'carlos.donante@example.com', nombre: 'Carlos', apellido: 'Gómez' },
+        ...data,
+      }));
+    });
+
+    it('el registro guarda la ubicación si viene', async () => {
+      const res = await request(app)
+        .post('/api/auth/registro')
+        .send({ ...DONANTE_VALIDO, latitud: -38.9516, longitud: -68.0591 });
+      expect(res.status).toBe(201);
+      expect(mockDonanteCreateSpy.mock.calls.at(-1)[0].data).toMatchObject({ latitud: -38.9516, longitud: -68.0591 });
+    });
+
+    it('el registro sin ubicación sigue funcionando (es opcional)', async () => {
+      const res = await request(app).post('/api/auth/registro').send(DONANTE_VALIDO);
+      expect(res.status).toBe(201);
+      expect(mockDonanteCreateSpy.mock.calls.at(-1)[0].data).toMatchObject({ latitud: null, longitud: null });
+    });
+
+    it.each([
+      [{ latitud: -38.9 }],
+      [{ latitud: 100, longitud: -68 }],
+      [{ latitud: -38.9, longitud: 'lejos' }],
+    ])('el registro rechaza una ubicación inválida: %j (400)', async (ubicacion) => {
+      const res = await request(app).post('/api/auth/registro').send({ ...DONANTE_VALIDO, ...ubicacion });
+      expect(res.status).toBe(400);
+      expect(mockDonanteCreateSpy).not.toHaveBeenCalled();
+    });
+
+    it('PATCH guarda la ubicación y el perfil la devuelve como número', async () => {
+      const res = await patchPerfil({ latitud: -38.9516, longitud: -68.0591 });
+      expect(res.status).toBe(200);
+      expect(datosGuardados()).toEqual({ latitud: -38.9516, longitud: -68.0591 });
+      expect(res.body).toMatchObject({ latitud: -38.9516, longitud: -68.0591 });
+    });
+
+    it('PATCH borra la ubicación con las dos en null', async () => {
+      const res = await patchPerfil({ latitud: null, longitud: null });
+      expect(res.status).toBe(200);
+      expect(datosGuardados()).toEqual({ latitud: null, longitud: null });
+    });
+
+    it('PATCH no acepta una ubicación a medias', async () => {
+      const res = await patchPerfil({ latitud: -38.9 });
+      expect(res.status).toBe(400);
+      expect(prisma.donante.update).not.toHaveBeenCalled();
+    });
+
+    it('PATCH cambia los canales de aviso', async () => {
+      const res = await patchPerfil({ avisoPush: false, avisoWhatsapp: true });
+      expect(res.status).toBe(200);
+      expect(datosGuardados()).toEqual({ avisoPush: false, avisoWhatsapp: true });
+      expect(res.body).toMatchObject({ avisoPush: false, avisoEmail: true, avisoWhatsapp: true });
+    });
+
+    it('PATCH rechaza un canal que no sea true o false', async () => {
+      const res = await patchPerfil({ avisoEmail: 'si' });
+      expect(res.status).toBe(400);
+      expect(prisma.donante.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Validaciones demográficas adicionales', () => {
     it('rechaza fecha de nacimiento en el futuro (400 DATOS_INVALIDOS)', async () => {
       const res = await request(app)
