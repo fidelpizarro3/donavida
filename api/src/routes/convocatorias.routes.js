@@ -7,6 +7,7 @@ const { autenticar, autorizar } = require('../middlewares/auth');
 const { datosInvalidos } = require('../utils/validaciones');
 const { cerrarVencidas } = require('./necesidades.routes');
 const { buscarCandidatos, cupoLibre } = require('../services/convocatoria');
+const { enviarAlertasDeConvocatoria } = require('../services/alertas');
 
 const router = Router();
 
@@ -145,6 +146,16 @@ router.post('/:idNecesidad/convocatoria', autenticar, autorizar('institucion'), 
         return creada;
     });
 
+    // TAREA-11: se mandan los avisos. La convocatoria ya quedó guardada: si el envío falla,
+    // las alertas siguen "pendiente" y no se pierde nada
+    let envio = [];
+    try {
+        envio = await enviarAlertasDeConvocatoria(convocatoria.idConvocatoria);
+    } catch (err) {
+        console.error('No se pudieron mandar las alertas:', err.message);
+    }
+    const resultadoDe = (id) => envio.find((r) => r.idDonante === id);
+
     res.status(201).json({
         idConvocatoria: convocatoria.idConvocatoria,
         idNecesidad: convocatoria.idNecesidad,
@@ -155,7 +166,16 @@ router.post('/:idNecesidad/convocatoria', autenticar, autorizar('institucion'), 
         creadaEn: convocatoria.creadaEn,
         alertas: idsDonantes.map((id) => {
             const { nombre, apellido, canal, motivo, distanciaKm } = porId.get(id);
-            return { idDonante: id, nombre, apellido, canal, motivo, distanciaKm, estado: 'pendiente' };
+            const resultado = resultadoDe(id);
+            return {
+                idDonante: id,
+                nombre,
+                apellido,
+                canal: resultado?.canal ?? canal,
+                motivo,
+                distanciaKm,
+                estado: resultado?.estado ?? 'pendiente',
+            };
         }),
     });
 });

@@ -1052,6 +1052,34 @@ input[type='radio'] {
   white-space: nowrap;
 }
 
+/* ─── Alertas del donante (TAREA-11) ────────────────────────────────────── */
+
+.avisos-push {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+}
+
+.avisos-push p {
+  margin: 0;
+  flex: 1;
+}
+
+.alerta-motivo {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.alerta-motivo small {
+  color: var(--text-muted);
+}
+
 .grupo-chip-chico {
   width: 2.4rem;
   height: 2.4rem;

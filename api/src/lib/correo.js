@@ -43,4 +43,34 @@ async function enviarCorreoVerificacion({ email, nombre, token }) {
   });
 }
 
-module.exports = { enviarCorreoVerificacion };
+// TAREA-11: aviso a un donante convocado. Lleva el motivo, la institución y la distancia (DV-9)
+async function enviarCorreoAlerta({ email, nombre, titulo, motivo, institucion, direccion, distanciaKm }) {
+  const enlace = process.env.APP_URL || 'http://localhost:5173';
+  await transporte.sendMail({
+    from: REMITENTE,
+    to: email,
+    subject: titulo,
+    text: [
+      `Hola ${nombre}:`,
+      '',
+      `${institucion} (${direccion}, a ${distanciaKm} km) necesita donantes.`,
+      `Por qué te llegó a vos: ${motivo}`,
+      '',
+      `Entrá a DonaVida para aceptar o rechazar: ${enlace}`,
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f1a1a">
+        <h1 style="color:#c92a2a;font-size:24px;margin:0 0 24px">DonaVida</h1>
+        <p style="font-size:16px;line-height:1.5">Hola ${escaparHtml(nombre)}:</p>
+        <p style="font-size:16px;line-height:1.5"><strong>${escaparHtml(institucion)}</strong> necesita donantes.</p>
+        <p style="font-size:15px;line-height:1.5;margin:0">📍 ${escaparHtml(direccion)} · a ${distanciaKm} km</p>
+        <p style="font-size:14px;line-height:1.5;color:#6b6262">Por qué te llegó a vos: ${escaparHtml(motivo)}</p>
+        <p style="text-align:center;margin:32px 0">
+          <a href="${enlace}" style="background:#c92a2a;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:999px;display:inline-block">Ver la alerta</a>
+        </p>
+        <p style="font-size:13px;color:#6b6262;line-height:1.5">Podés pausar las alertas desde tu perfil.</p>
+      </div>`,
+  });
+}
+
+module.exports = { enviarCorreoVerificacion, enviarCorreoAlerta };

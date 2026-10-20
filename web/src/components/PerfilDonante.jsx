@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AptitudDonante } from './AptitudDonante'
+import { MisAlertas } from './alertas/MisAlertas'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -214,6 +215,9 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
           </div>
         </div>
       </div>
+
+      {/* TAREA-11: alertas de las instituciones que lo convocaron */}
+      <MisAlertas token={token} apiUrl={apiUrl} />
 
       {/* TAREA-3: habilitación para donar y cuestionario de aptitud */}
       <AptitudDonante token={token} apiUrl={apiUrl} idDonante={perfil.idDonante} />

@@ -354,6 +354,10 @@ Exportadas por `api/src/services/habilitacion.js` para la selección de donantes
 - Suma 1 a `donante.alertasMesActual`. B la llama cada vez que envía una alerta.
 - **Devuelve:** `{ alertasMesActual: 3, topeAlertasMes: 4 }`
 
+> **TAREA-11:** mientras A no implemente estas dos funciones, B lo resuelve en `api/src/services/alertas.js`:
+> lee el contacto y las suscripciones del donante, y el tope se calcula **contando las alertas enviadas en el mes**
+> (`alerta.enviadaEn`), así no hace falta reiniciar un contador. `alertasMesActual` queda como resumen.
+
 #### `POST /api/donantes/:idDonante/donacion-registrada` ✅ implementado
 
 La llama quien registra la donación (func. 11). También se puede llamar directo a
@@ -540,6 +544,39 @@ El hospital confirma la lista (con los cambios que haya hecho) y se guarda (TARE
     "donantesQueRespondieron": 52
   }
   ```
+
+#### Alertas al donante (TAREA-11) ✅ implementado
+
+Al confirmar una convocatoria (`POST /api/necesidades/:idNecesidad/convocatoria`) se mandan las alertas:
+`push` a todas las suscripciones activas del donante (si no tiene ninguna, o el push no está configurado, va por
+correo si lo tiene activado); `email` por correo. Antes de mandar se revisa el tope del mes y la pausa: si no
+corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae el `estado` y el `canal` final de cada una.
+
+- `GET /api/alertas/mias` (rol `donante`): sus alertas `enviada`, `aceptada` o `rechazada`, la más nueva primero.
+  ```json
+  [
+    {
+      "idAlerta": "<uuid>",
+      "estado": "enviada",
+      "canal": "email",
+      "motivo": "Mismo grupo (O−). Habilitado para donar. A 0.3 km de la institución.",
+      "distanciaKm": 0.3,
+      "enviadaEn": "2026-10-19T21:30:00.000Z",
+      "respondidaEn": null,
+      "puedeResponder": true,
+      "institucion": { "idInstitucion": "<uuid>", "nombre": "Hospital Central", "direccion": "Av. Argentina 1400" },
+      "necesidad": { "grupoSanguineo": "O", "factorRh": "negativo", "componente": "globulos_rojos",
+                     "urgencia": "urgente", "fechaLimite": "2026-10-26", "estado": "abierta" }
+    }
+  ]
+  ```
+- `POST /api/alertas/:idAlerta/aceptar` y `POST /api/alertas/:idAlerta/rechazar` (rol `donante`): pasan a
+  `aceptada` / `rechazada` y completan `respondidaEn`. Aceptar devuelve además `siguientePaso`; con
+  `institucion.idInstitucion` el front lleva a reservar turno (TAREA-10).
+  **Errores:** 404 si no es suya o no se mandó; 409 si ya respondió o la necesidad ya no está `abierta`.
+- `GET /api/push/clave-publica` (público): `{ "clavePublica": "..." }`, o 503 si faltan las claves VAPID en `api/.env`.
+- `POST /api/push/suscripcion` (logueado): body = `suscripcion.toJSON()` del navegador
+  (`{ "endpoint": "https://...", "keys": { "p256dh": "...", "auth": "..." } }`). Si ya existía, la reactiva. **201.**
 
 ### Dominio C — Inventario y red
 

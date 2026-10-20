@@ -10,7 +10,7 @@ jest.mock('../src/lib/prisma', () => ({
   donante: { findMany: jest.fn() },
   franjaHoraria: { count: jest.fn(), findMany: jest.fn() },
   convocatoria: { create: jest.fn() },
-  alerta: { createMany: jest.fn() },
+  alerta: { createMany: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
 }));
 
@@ -57,7 +57,7 @@ const donante = (idDonante, datos) => ({
   avisoPush: true,
   avisoEmail: true,
   avisoWhatsapp: false,
-  alertasMesActual: 0,
+  _count: { alertas: 0 }, // alertas recibidas este mes
   topeAlertasMes: 4,
   usuario: { nombre: 'Ana', apellido: 'Paz' },
   ...datos,
@@ -88,6 +88,7 @@ beforeEach(() => {
     ...data,
   }));
   prisma.alerta.createMany.mockResolvedValue({ count: 0 });
+  prisma.alerta.findMany.mockResolvedValue([]); // el envío (TAREA-11) se prueba en alertas.test.js
 });
 
 describe('Funciones de ayuda', () => {
@@ -169,7 +170,7 @@ describe('Criterio 2: filtra por compatibilidad, habilitación y alertas no paus
   });
 
   test('quien llegó a su tope de alertas del mes no entra', async () => {
-    prisma.donante.findMany.mockResolvedValue([donante(ID_CERCA, { alertasMesActual: 4 })]);
+    prisma.donante.findMany.mockResolvedValue([donante(ID_CERCA, { _count: { alertas: 4 } })]);
     const res = await proponer();
     expect(res.body.sugeridos).toHaveLength(0);
   });
