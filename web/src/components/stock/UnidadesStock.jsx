@@ -6,15 +6,35 @@ import { Esqueleto } from '../comunes/Esqueleto'
 
 // Criterios: filtros por grupo, componente y estado, y el detalle de cualquier unidad.
 // La lista viene de la que vence primero a la última. "Ver detalle" despliega el recorrido debajo de la fila.
-// TAREA-7: en las vencidas, "Descartar" pide confirmación debajo de la fila (no se puede deshacer).
-export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pedir, onDescartar, ocupado, version }) {
+// TAREA-5: en las disponibles, "Usar" (sale del stock disponible).
+// TAREA-7: en las vencidas, "Descartar". Las dos piden confirmación debajo de la fila (no se pueden deshacer).
+const ACCIONES = {
+  usar: {
+    boton: 'Usar',
+    clase: 'btn-secondary',
+    pregunta: '¿Usar la unidad',
+    detalle: 'Sale del stock disponible y queda registrado el uso.',
+    confirmar: 'Sí, usar',
+    haciendo: 'Usando...',
+  },
+  descartar: {
+    boton: 'Descartar',
+    clase: 'btn-primary',
+    pregunta: '¿Confirmás el descarte de',
+    detalle: 'Sale del inventario y no se puede deshacer.',
+    confirmar: 'Sí, descartar',
+    haciendo: 'Descartando...',
+  },
+}
+
+export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pedir, onUsar, onDescartar, ocupado, version }) {
   const [abierta, setAbierta] = useState(null) // id de la unidad con el detalle desplegado
-  const [confirmando, setConfirmando] = useState(null) // id de la unidad que se está por descartar
+  const [confirmando, setConfirmando] = useState(null) // { idUnidadSangre, accion } de la que se está por usar o descartar
   const hayFiltros = filtros.grupo || filtros.componente || filtros.estado
 
-  const confirmarDescarte = async (unidad) => {
-    const descartada = await onDescartar(unidad)
-    if (descartada) setConfirmando(null)
+  const confirmar = async (unidad, accion) => {
+    const hecha = await (accion === 'usar' ? onUsar : onDescartar)(unidad)
+    if (hecha) setConfirmando(null)
   }
 
   return (
@@ -64,9 +84,10 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
               {unidades.map((unidad) => {
                 const estado = ESTADOS_UNIDAD[estadoVisible(unidad)]
                 const estaAbierta = abierta === unidad.idUnidadSangre
-                // También las que vencieron después de la última corrida automática: la API las marca al descartar
-                const sePuedeDescartar = estadoVisible(unidad) === 'vencida'
-                const estaConfirmando = confirmando === unidad.idUnidadSangre
+                // Disponible y vigente: se puede usar. Vencida (también si venció después de la última corrida
+                // automática: la API la marca al descartar): se puede descartar
+                const accion = { disponible: 'usar', vencida: 'descartar' }[estadoVisible(unidad)]
+                const estaConfirmando = confirmando?.idUnidadSangre === unidad.idUnidadSangre
                 return (
                   <Fragment key={unidad.idUnidadSangre}>
                     <tr>
@@ -93,14 +114,14 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
                           >
                             {estaAbierta ? 'Ocultar' : 'Ver detalle'}
                           </button>
-                          {sePuedeDescartar && !estaConfirmando && (
+                          {accion && !estaConfirmando && (
                             <button
                               type="button"
-                              className="btn btn-primary btn-chico"
-                              onClick={() => setConfirmando(unidad.idUnidadSangre)}
+                              className={`btn ${ACCIONES[accion].clase} btn-chico`}
+                              onClick={() => setConfirmando({ idUnidadSangre: unidad.idUnidadSangre, accion })}
                               disabled={ocupado}
                             >
-                              Descartar
+                              {ACCIONES[accion].boton}
                             </button>
                           )}
                         </div>
@@ -109,13 +130,13 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
                     {estaConfirmando && (
                       <tr className="fila-detalle">
                         <td colSpan="6">
-                          <div className="confirmar-descarte">
+                          <div className="confirmar-accion">
                             <span>
-                              ¿Confirmás el descarte de <strong className="codigo-unidad">{unidad.codigo}</strong>? Sale del
-                              inventario y no se puede deshacer.
+                              {ACCIONES[confirmando.accion].pregunta} <strong className="codigo-unidad">{unidad.codigo}</strong>?{' '}
+                              {ACCIONES[confirmando.accion].detalle}
                             </span>
-                            <button type="button" className="btn btn-primary btn-chico" onClick={() => confirmarDescarte(unidad)} disabled={ocupado}>
-                              {ocupado ? 'Descartando...' : 'Sí, descartar'}
+                            <button type="button" className="btn btn-primary btn-chico" onClick={() => confirmar(unidad, confirmando.accion)} disabled={ocupado}>
+                              {ocupado ? ACCIONES[confirmando.accion].haciendo : ACCIONES[confirmando.accion].confirmar}
                             </button>
                             <button type="button" className="btn btn-secondary btn-chico" onClick={() => setConfirmando(null)} disabled={ocupado}>
                               No
@@ -127,7 +148,7 @@ export function UnidadesStock({ unidades, filtros, onCambiarFiltro, cargando, pe
                     {estaAbierta && (
                       <tr className="fila-detalle">
                         <td colSpan="6">
-                          {/* La key con la versión vuelve a pedir el recorrido después de descartar */}
+                          {/* La key con la versión vuelve a pedir el recorrido después de usar o descartar */}
                           <DetalleUnidad key={version} idUnidadSangre={unidad.idUnidadSangre} pedir={pedir} />
                         </td>
                       </tr>

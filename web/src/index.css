@@ -1264,7 +1264,7 @@ input[type='radio'] {
   }
 }
 
-/* ─── Descarte de unidades vencidas (TAREA-7) ────────────────────────────── */
+/* ─── Usar y descartar unidades (TAREA-5 y 7) ────────────────────────────── */
 
 .acciones-fila {
   display: flex;
@@ -1276,7 +1276,7 @@ input[type='radio'] {
   white-space: nowrap;
 }
 
-.confirmar-descarte {
+.confirmar-accion {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1284,7 +1284,7 @@ input[type='radio'] {
   font-size: 0.92rem;
 }
 
-.confirmar-descarte > span {
+.confirmar-accion > span {
   flex: 1 1 18rem;
 }
 

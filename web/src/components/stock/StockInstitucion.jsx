@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { AvisoPorVencer } from './AvisoPorVencer'
 import { ResumenStock } from './ResumenStock'
 import { FormularioStockMinimo } from './FormularioStockMinimo'
+import { FormularioUnidad } from './FormularioUnidad'
 import { UnidadesStock } from './UnidadesStock'
-import { COMPONENTES } from '../necesidades/textos'
+import { COMPONENTES, fechaLegible } from '../necesidades/textos'
 import { GRUPOS } from './textos'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 
@@ -15,6 +16,7 @@ const SIN_FILTROS = { grupo: '', componente: '', estado: '' }
 //   - Formulario para definir el stock mínimo
 //   - Listado con filtros y el detalle (recorrido) de cada unidad
 //   - TAREA-7: confirmar el descarte de las unidades vencidas
+//   - TAREA-5: cargar una unidad, y usar una disponible desde el listado
 // Toda la comunicación con la API pasa por la función pedir().
 export function StockInstitucion({ token, apiUrl }) {
   const [resumen, setResumen] = useState([])
@@ -86,7 +88,7 @@ export function StockInstitucion({ token, apiUrl }) {
     setFiltros((prev) => ({ ...prev, [campo]: valor }))
   }
 
-  // Ejecuta una acción (guardar un mínimo, descartar una unidad), muestra el texto que devuelve
+  // Ejecuta una acción (cargar, usar o descartar una unidad, guardar un mínimo), muestra el texto que devuelve
   // y recarga todo. Devuelve true si salió bien.
   const ejecutar = async (accion) => {
     setOcupado(true)
@@ -114,6 +116,20 @@ export function StockInstitucion({ token, apiUrl }) {
         : `Stock mínimo guardado: ${grupo.texto} ${COMPONENTES[guardado.componente].toLowerCase()}, ${guardado.unidadesMinimas} ${guardado.unidadesMinimas === 1 ? 'unidad' : 'unidades'}.`
     })
 
+  // TAREA-5: la institución carga una unidad. Se muestran el código y el vencimiento que puso la API
+  const cargarUnidad = (datos) =>
+    ejecutar(async () => {
+      const unidad = await pedir('', { method: 'POST', body: JSON.stringify(datos) })
+      return `Unidad ${unidad.codigo} cargada: vence el ${fechaLegible(unidad.fechaVencimiento)}.`
+    })
+
+  // TAREA-6: usar una unidad disponible (sale del stock disponible y queda el movimiento de uso)
+  const usar = (unidad) =>
+    ejecutar(async () => {
+      await pedir(`/${unidad.idUnidadSangre}/usar`, { method: 'PATCH' })
+      return `Unidad ${unidad.codigo} usada: salió del stock disponible.`
+    })
+
   // TAREA-7: la institución confirma el descarte de una unidad vencida
   const descartar = (unidad) =>
     ejecutar(async () => {
@@ -132,6 +148,8 @@ export function StockInstitucion({ token, apiUrl }) {
         <ResumenStock filas={resumen} cargando={cargandoResumen} />
       </section>
 
+      <FormularioUnidad onCargar={cargarUnidad} cargando={ocupado} />
+
       <FormularioStockMinimo onGuardar={guardarMinimo} guardando={ocupado} />
 
       <UnidadesStock
@@ -140,6 +158,7 @@ export function StockInstitucion({ token, apiUrl }) {
         onCambiarFiltro={cambiarFiltro}
         cargando={cargandoUnidades}
         pedir={pedir}
+        onUsar={usar}
         onDescartar={descartar}
         ocupado={ocupado}
         version={version}
