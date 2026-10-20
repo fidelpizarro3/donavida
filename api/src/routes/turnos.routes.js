@@ -4,7 +4,7 @@ const { Router } = require('express');
 const { randomBytes } = require('crypto');
 const prisma = require('../lib/prisma');
 const { autenticar, autorizar } = require('../middlewares/auth');
-const { datosInvalidos, obtenerFechaHoy } = require('../utils/validaciones');
+const { datosInvalidos, esFechaValida, obtenerFechaHoy } = require('../utils/validaciones');
 const { formatearFecha, formatearHora, parsearFecha } = require('../utils/formateadores');
 const { obtenerHabilitacion } = require('../services/habilitacion');
 
@@ -37,7 +37,26 @@ function mapearTurno(turno) {
     horaInicio: formatearHora(turno.franjaHoraria.horaInicio),
     horaFin: formatearHora(turno.franjaHoraria.horaFin),
     idInstitucion: turno.franjaHoraria.idInstitucion,
+    idAlerta: turno.idAlerta, // con la alerta, el front sabe hasta qué fecha puede reprogramar
   };
+}
+
+// Busca un turno del donante logueado, con lo necesario para cancelarlo o reprogramarlo.
+// Devuelve null si no existe o es de otro donante (se responde 404 en los dos casos)
+async function buscarTurnoPropio(idTurno, idUsuario) {
+  if (!UUID_VALIDO.test(idTurno ?? '')) return null;
+  return prisma.turno.findFirst({
+    where: { idTurno, donante: { idUsuario } },
+    include: { franjaHoraria: true, alerta: { include: { convocatoria: { include: { necesidad: true } } } } },
+  });
+}
+
+// Solo se puede cambiar un turno reservado que todavía no pasó. Devuelve el mensaje de error, o null
+function motivoParaNoCambiar(turno) {
+  if (turno.estado === 'cancelado') return 'Ese turno ya está cancelado';
+  if (turno.estado !== 'reservado') return 'Ese turno ya pasó y quedó registrado';
+  if (turno.franjaHoraria.fecha < parsearFecha(obtenerFechaHoy())) return 'Ese turno ya pasó';
+  return null;
 }
 
 // Mismo criterio que unidades y franjas: la institución sale del token
@@ -172,6 +191,148 @@ router.post('/', autenticar, autorizar('donante'), async (req, res) => {
   }
 
   res.status(201).json(mapearTurno(turno));
+});
+
+// GET /api/turnos?fecha=YYYY-MM-DD: los turnos de un día en mi institución (por defecto, hoy).
+// Es la lista con la que el hospital registra quién vino y quién donó (TAREA-11 / DV-11)
+router.get('/', autenticar, autorizar('institucion'), async (req, res) => {
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({ error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada' } });
+  }
+
+  const fecha = req.query.fecha ?? obtenerFechaHoy();
+  if (typeof fecha !== 'string' || !esFechaValida(fecha)) {
+    return datosInvalidos(res, 'fecha debe tener formato YYYY-MM-DD');
+  }
+
+  const turnos = await prisma.turno.findMany({
+    where: {
+      estado: { not: 'cancelado' },
+      franjaHoraria: { idInstitucion, fecha: parsearFecha(fecha) },
+    },
+    include: {
+      franjaHoraria: true,
+      donacion: true,
+      donante: { include: { usuario: { select: { nombre: true, apellido: true } } } },
+    },
+    orderBy: [{ franjaHoraria: { horaInicio: 'asc' } }],
+  });
+
+  res.json(turnos.map((turno) => ({
+    ...mapearTurno(turno),
+    donante: {
+      idDonante: turno.donante.idDonante,
+      nombre: turno.donante.usuario.nombre,
+      apellido: turno.donante.usuario.apellido,
+      documento: turno.donante.documento,
+      grupoSanguineo: turno.donante.grupoSanguineo, // null si todavía no lo sabe: se confirma al donar
+      factorRh: turno.donante.factorRh,
+    },
+    resultadoDonacion: turno.donacion?.resultado ?? null,
+  })));
+});
+
+// PATCH /api/turnos/:idTurno: el donante reprograma su turno a otra franja del mismo hospital
+//   Body: { "idFranjaHoraria": "<uuid>" }
+// Se modifica el mismo turno (no se crea otro): así se respeta "una alerta = un turno"
+router.patch('/:idTurno', autenticar, autorizar('donante'), async (req, res) => {
+  const turno = await buscarTurnoPropio(req.params.idTurno, req.usuario.id);
+  if (!turno) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'No tenés ese turno' } });
+  }
+  const motivo = motivoParaNoCambiar(turno);
+  if (motivo) {
+    return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: motivo } });
+  }
+
+  const { idFranjaHoraria } = req.body ?? {};
+  if (!UUID_VALIDO.test(idFranjaHoraria ?? '')) {
+    return datosInvalidos(res, 'idFranjaHoraria es obligatorio y tiene que ser un identificador válido');
+  }
+  if (idFranjaHoraria === turno.idFranjaHoraria) {
+    return datosInvalidos(res, 'Ya tenés el turno en esa franja');
+  }
+
+  const nueva = await prisma.franjaHoraria.findUnique({ where: { idFranjaHoraria } });
+  if (!nueva) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'La franja no existe' } });
+  }
+  if (nueva.idInstitucion !== turno.franjaHoraria.idInstitucion) {
+    return datosInvalidos(res, 'Elegí un horario del mismo hospital');
+  }
+  const { necesidad } = turno.alerta.convocatoria;
+  if (nueva.fecha > necesidad.fechaLimite) {
+    return datosInvalidos(res, `La necesidad es hasta el ${formatearFecha(necesidad.fechaLimite)}: elegí una franja anterior`);
+  }
+
+  let actualizado;
+  try {
+    actualizado = await prisma.$transaction(async (tx) => {
+      // Ocupa el lugar nuevo solo si queda cupo (mismo control que al reservar)...
+      const { count } = await tx.franjaHoraria.updateMany({
+        where: {
+          idFranjaHoraria,
+          cerrada: false,
+          fecha: { gte: parsearFecha(obtenerFechaHoy()) },
+          cupoOcupado: { lt: prisma.franjaHoraria.fields.cupoTotal },
+        },
+        data: { cupoOcupado: { increment: 1 } },
+      });
+      if (count === 0) {
+        throw new ErrorReserva(409, 'CONFLICTO', 'Esa franja se llenó o se cerró: elegí otro horario');
+      }
+      // ...y libera el viejo: el lugar vuelve a quedar disponible
+      await tx.franjaHoraria.update({
+        where: { idFranjaHoraria: turno.idFranjaHoraria },
+        data: { cupoOcupado: { decrement: 1 } },
+      });
+      return tx.turno.update({
+        where: { idTurno: turno.idTurno },
+        // Cambió el día: el recordatorio se vuelve a mandar el día anterior al nuevo turno
+        data: { idFranjaHoraria, recordatorioEnviadoEn: null },
+        include: { franjaHoraria: true },
+      });
+    });
+  } catch (err) {
+    if (err instanceof ErrorReserva) {
+      return res.status(err.status).json({ error: { codigo: err.codigo, mensaje: err.message } });
+    }
+    throw err;
+  }
+
+  res.json(mapearTurno(actualizado));
+});
+
+// POST /api/turnos/:idTurno/cancelar: el donante avisa que no va.
+// El lugar vuelve a quedar disponible y la alerta pasa a "rechazada" (no se lo penaliza)
+router.post('/:idTurno/cancelar', autenticar, autorizar('donante'), async (req, res) => {
+  const turno = await buscarTurnoPropio(req.params.idTurno, req.usuario.id);
+  if (!turno) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'No tenés ese turno' } });
+  }
+  const motivo = motivoParaNoCambiar(turno);
+  if (motivo) {
+    return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: motivo } });
+  }
+
+  const cancelado = await prisma.$transaction(async (tx) => {
+    await tx.franjaHoraria.update({
+      where: { idFranjaHoraria: turno.idFranjaHoraria },
+      data: { cupoOcupado: { decrement: 1 } },
+    });
+    await tx.alerta.update({
+      where: { idAlerta: turno.idAlerta },
+      data: { estado: 'rechazada', respondidaEn: new Date() },
+    });
+    return tx.turno.update({
+      where: { idTurno: turno.idTurno },
+      data: { estado: 'cancelado' },
+      include: { franjaHoraria: true },
+    });
+  });
+
+  res.json(mapearTurno(cancelado));
 });
 
 module.exports = router;

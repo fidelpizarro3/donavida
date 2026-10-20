@@ -73,4 +73,38 @@ async function enviarCorreoAlerta({ email, nombre, titulo, motivo, institucion, 
   });
 }
 
-module.exports = { enviarCorreoVerificacion, enviarCorreoAlerta };
+// TAREA-10 (DV-10): recordatorio el día anterior al turno, con la dirección y cómo llegar
+async function enviarCorreoRecordatorio({ email, nombre, institucion, direccion, fecha, horaInicio, horaFin, enlaceMapa }) {
+  await transporte.sendMail({
+    from: REMITENTE,
+    to: email,
+    subject: `Mañana te esperamos en ${institucion}`,
+    text: [
+      `Hola ${nombre}:`,
+      '',
+      `Te recordamos tu turno para donar sangre: mañana ${fecha}, entre las ${horaInicio} y las ${horaFin}.`,
+      `Dónde: ${institucion}, ${direccion}`,
+      `Cómo llegar: ${enlaceMapa}`,
+      '',
+      'Antes de donar: desayuná liviano, tomá mucha agua y llevá tu DNI.',
+      'Si no podés ir, cancelá el turno desde DonaVida así el lugar queda para otra persona.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f1a1a">
+        <h1 style="color:#c92a2a;font-size:24px;margin:0 0 24px">DonaVida</h1>
+        <p style="font-size:16px;line-height:1.5">Hola ${escaparHtml(nombre)}:</p>
+        <p style="font-size:16px;line-height:1.5">Mañana te esperamos para donar sangre. ¡Gracias!</p>
+        <div style="background:#f4eeec;border-radius:12px;padding:16px 20px;margin:24px 0">
+          <p style="margin:0 0 8px;font-size:16px"><strong>📅 ${escaparHtml(fecha)}</strong>, de ${horaInicio} a ${horaFin}</p>
+          <p style="margin:0;font-size:15px">📍 ${escaparHtml(institucion)} · ${escaparHtml(direccion)}</p>
+        </div>
+        <p style="text-align:center;margin:24px 0">
+          <a href="${enlaceMapa}" style="background:#c92a2a;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:999px;display:inline-block">Cómo llegar</a>
+        </p>
+        <p style="font-size:14px;line-height:1.5">Antes de donar: desayuná liviano, tomá mucha agua y llevá tu DNI.</p>
+        <p style="font-size:13px;color:#6b6262;line-height:1.5">Si no podés ir, cancelá el turno desde DonaVida así el lugar queda para otra persona.</p>
+      </div>`,
+  });
+}
+
+module.exports = { enviarCorreoVerificacion, enviarCorreoAlerta, enviarCorreoRecordatorio };

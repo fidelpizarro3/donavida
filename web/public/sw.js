@@ -1,5 +1,31 @@
 // TAREA-11: service worker de DonaVida.
 // El navegador lo deja corriendo aparte de la página: por eso las alertas push llegan con la app cerrada.
+// TAREA-10 / DV-11: además guarda una copia de la app para que abra sin conexión
+// (el próximo turno y el historial los guarda el propio front en el navegador).
+const CACHE = 'donavida-v1'
+
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+
+// Primero la red (siempre lo más nuevo) y, si no hay conexión, la última copia guardada.
+// Solo se guardan los archivos de la propia app: la API (otro puerto) no pasa por acá
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+  const mismaApp = new URL(request.url).origin === self.location.origin
+  if (request.method !== 'GET' || !mismaApp) return
+
+  event.respondWith(
+    fetch(request)
+      .then((respuesta) => {
+        if (respuesta.ok) {
+          const copia = respuesta.clone()
+          caches.open(CACHE).then((cache) => cache.put(request, copia))
+        }
+        return respuesta
+      })
+      .catch(() => caches.match(request).then((guardada) => guardada || caches.match('/')))
+  )
+})
 
 // Llega un push del servidor (api/src/services/alertas.js): se muestra la notificación
 self.addEventListener('push', (event) => {

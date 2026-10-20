@@ -1300,3 +1300,390 @@ input[type='radio'] {
   left: 1.25rem;
   max-width: calc(100cqw - 2.5rem);
 }
+
+/* ─── Panel de la institución: pestañas ─────────────────────────────────── */
+
+.panel-cabecera {
+  padding-bottom: 0;
+}
+
+.pestanas {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1.25rem -0.5rem 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pestana {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pestana:hover {
+  color: var(--text-main);
+}
+
+.pestana.activa {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ─── Agenda y turnos (TAREA-10) y donaciones (DV-11) ───────────────────── */
+
+.agenda-form {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 0.8fr auto;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+}
+
+.agenda-form .form-group {
+  margin-bottom: 0;
+}
+
+.franjas-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.franja {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+.franja-cerrada {
+  opacity: 0.6;
+  background: var(--bg-alt);
+}
+
+.franja-datos {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.franja-datos small {
+  color: var(--text-muted);
+}
+
+.franja-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.franja-acciones .btn-link,
+.selector-dia .btn-link,
+.card > .btn-link {
+  margin-top: 0;
+}
+
+.progreso-fino {
+  height: 6px;
+}
+
+/* Ficha tipo calendario: "MIÉ / 21 / OCT" */
+.ficha-fecha {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.4rem;
+  height: 3.6rem;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--primary-light);
+  color: var(--primary);
+  line-height: 1.1;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.ficha-fecha strong {
+  font-size: 1.35rem;
+  color: var(--primary-dark);
+}
+
+.ficha-fecha-chica {
+  width: 3rem;
+  height: 3.2rem;
+}
+
+.ficha-fecha-grande {
+  width: 4.5rem;
+  height: 4.8rem;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.ficha-fecha-grande strong {
+  font-size: 2rem;
+  color: #fff;
+}
+
+.vacio {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.vacio span {
+  font-size: 1.75rem;
+}
+
+.vacio p {
+  margin: 0;
+}
+
+.selector-dia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.selector-dia strong {
+  text-transform: capitalize;
+}
+
+.grupo-chip-vacio {
+  background: var(--bg-alt);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+}
+
+.registro-donacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: var(--success-light);
+}
+
+.registro-donacion .form-group {
+  margin-bottom: 0;
+}
+
+/* Turno del donante: "ticket" con la fecha grande */
+.turno-ticket {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary-light), var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.turno-ticket-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.92rem;
+}
+
+.turno-ticket-datos > strong {
+  font-size: 1.15rem;
+  text-transform: capitalize;
+}
+
+.consejos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.consejos li {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  font-size: 0.85rem;
+}
+
+.franjas-elegir {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.franja-opcion {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.6rem 0.9rem 0.6rem 0.6rem;
+  font: inherit;
+  text-align: left;
+  color: var(--text-main);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.franja-opcion:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.franja-opcion-datos {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.franja-opcion-datos small {
+  color: var(--text-muted);
+}
+
+.franja-opcion-accion {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* Historial del donante */
+.historial-resumen {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.historial-numero,
+.historial-proxima {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+}
+
+.historial-numero strong {
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.historial-numero span,
+.historial-proxima span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.historial-proxima {
+  background: var(--warning-light);
+}
+
+.historial-proxima-ok {
+  background: var(--success-light);
+}
+
+.linea-tiempo {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linea-tiempo li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0 0.75rem 1.5rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.linea-tiempo li::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--card-bg);
+}
+
+.linea-tiempo-fecha {
+  width: 6.5rem;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.linea-tiempo-datos {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.linea-tiempo-datos small {
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .agenda-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .agenda-form .btn {
+    grid-column: 1 / -1;
+  }
+
+  .historial-resumen {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .historial-proxima {
+    grid-column: 1 / -1;
+  }
+
+  .turno-ticket {
+    align-items: flex-start;
+  }
+
+  .linea-tiempo-fecha {
+    width: 4.5rem;
+  }
+}

@@ -578,6 +578,38 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
 - `POST /api/push/suscripcion` (logueado): body = `suscripcion.toJSON()` del navegador
   (`{ "endpoint": "https://...", "keys": { "p256dh": "...", "auth": "..." } }`). Si ya existía, la reactiva. **201.**
 
+#### Agenda, turnos y donaciones (TAREA-10 y DV-11) ✅ implementado
+
+**Agenda (institución):** `POST /api/franjas` (`fecha`, `horaInicio`, `horaFin`, `cupoTotal`), `GET /api/franjas`
+(de hoy en adelante), `PATCH /api/franjas/:id/cerrar`. **Donante:** `GET /api/franjas/disponibles?idInstitucion=`
+(abiertas, con lugar y de hoy en adelante). La convocatoria (TAREA-8) toma el cupo libre de estas franjas.
+
+**Turnos:**
+- `POST /api/turnos` (donante): `{ idAlerta, idFranjaHoraria }`. La alerta tiene que estar `aceptada`; ocupa un
+  lugar en una transacción (una franja llena no se puede reservar).
+- `PATCH /api/turnos/:idTurno` (donante): `{ idFranjaHoraria }`. Reprograma el **mismo** turno a otra franja del
+  mismo hospital, antes de la fecha límite de la necesidad: ocupa la nueva, libera la vieja y reinicia el recordatorio.
+- `POST /api/turnos/:idTurno/cancelar` (donante): libera el lugar y la alerta pasa a `rechazada` (sin penalización).
+- `GET /api/turnos/proximo` (donante, o institución con `?idDonante=`): trae también `idAlerta`.
+- `GET /api/turnos?fecha=YYYY-MM-DD` (institución, por defecto hoy): los turnos del día con el `donante`
+  (`nombre`, `apellido`, `documento`, `grupoSanguineo`, `factorRh`) y `resultadoDonacion`.
+- **Recordatorio:** `api/src/services/recordatorios.js` corre al arrancar y cada hora; manda correo (y push si lo
+  tiene activado) a los turnos de **mañana** con la dirección y un link de Google Maps. Usa `turno.recordatorioEnviadoEn`
+  para no repetirlo.
+
+**Donaciones (DV-11):**
+- `POST /api/donaciones` (institución): `{ idTurno, resultado: "realizada" | "rechazada" | "ausente", componente?,
+  grupoSanguineo?, factorRh? }`. Solo turnos `reservado` de hoy o antes.
+  - `ausente`: turno `ausente`, sin donación ni penalización.
+  - `rechazada` (control médico): se guarda la donación y el turno queda `asistio`; no genera unidad.
+  - `realizada`: crea la donación, la unidad con `registrarIngresoUnidad()` (DV-5), suma 1 a `unidadesCubiertas` de la
+    necesidad (la cierra como `cubierta` si se completa) y arranca la espera con `registrarDonacion()` (DV-3), que
+    también completa el grupo si el donante no lo tenía (en ese caso `grupoSanguineo` y `factorRh` son obligatorios).
+  - **201:** `{ idTurno, estadoTurno, donacion, unidad: { codigo, componente, fechaVencimiento }, aptoDesde }`.
+- `GET /api/donaciones/mias` (donante): `{ habilitado, aptoDesde, motivo, totalDonaciones, donaciones: [{ fecha,
+  resultado, institucion: { nombre, direccion } }] }`.
+- **Sin conexión:** el front guarda el próximo turno y el historial en el navegador, y el service worker guarda la app.
+
 ### Dominio C — Inventario y red
 
 #### `GET /api/inventario/disponibilidad-red`
