@@ -96,6 +96,33 @@ router.get('/', autenticar, autorizar('institucion'), async (req, res) => {
   res.json(franjas.map(mapearFranja));
 });
 
+// GET /api/franjas/disponibles?idInstitucion=...: las franjas donde un donante todavía puede reservar.
+// Una franja llena o cerrada no se ofrece: así nadie elige un horario que no existe
+router.get('/disponibles', autenticar, autorizar('donante'), async (req, res) => {
+  const { idInstitucion } = req.query;
+  if (!idInstitucion || !UUID_VALIDO.test(idInstitucion)) {
+    return datosInvalidos(res, 'idInstitucion es obligatorio y tiene que ser un identificador válido');
+  }
+
+  const institucion = await prisma.institucion.findUnique({ where: { idInstitucion } });
+  if (!institucion || institucion.estado !== 'aprobada') {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'La institución no existe o no está habilitada' } });
+  }
+
+  const franjas = await prisma.franjaHoraria.findMany({
+    where: {
+      idInstitucion,
+      cerrada: false,
+      fecha: { gte: parsearFecha(obtenerFechaHoy()) },
+      // Compara dos columnas de la misma fila: "cupoOcupado menor que el cupoTotal de esta franja"
+      cupoOcupado: { lt: prisma.franjaHoraria.fields.cupoTotal },
+    },
+    orderBy: [{ fecha: 'asc' }, { horaInicio: 'asc' }],
+  });
+
+  res.json(franjas.map(mapearFranja));
+});
+
 // PATCH /api/franjas/:idFranjaHoraria/cerrar: deja de ofrecer la franja.
 // Los turnos ya reservados en ella se mantienen: cerrar no le cancela el turno a nadie
 router.patch('/:idFranjaHoraria/cerrar', autenticar, autorizar('institucion'), async (req, res) => {
