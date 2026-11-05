@@ -48,6 +48,40 @@ router.get('/mis-instituciones', autenticar, autorizar('institucion'), async (re
   res.json(resultado);
 });
 
+const ESTADOS_INSTITUCION = ['pendiente', 'aprobada', 'rechazada', 'baja'];
+
+// GET /api/instituciones?estado=pendiente: listado para el panel del admin (el filtro es opcional)
+// El admin necesita ver los datos privados (documentación, motivo de rechazo) y quién pidió el alta,
+// para decidir si la aprueba. Las pendientes salen primero: el enum se ordena en el orden en que se declaró.
+router.get('/', autenticar, autorizar('admin'), async (req, res) => {
+  const { estado } = req.query;
+  if (estado !== undefined && !ESTADOS_INSTITUCION.includes(estado)) {
+    return datosInvalidos(res, 'estado debe ser pendiente, aprobada, rechazada o baja');
+  }
+
+  const instituciones = await prisma.institucion.findMany({
+    where: { estado }, // si no vino estado, es undefined y Prisma no filtra
+    include: {
+      usuarios: { include: { usuario: { select: { nombre: true, apellido: true, email: true } } } },
+    },
+    orderBy: [{ estado: 'asc' }, { nombre: 'asc' }],
+  });
+
+  const resultado = instituciones.map((i) => ({
+    ...mapearInstitucionPublica(i),
+    documentacionUrl: i.documentacionUrl,
+    motivoRechazo: i.motivoRechazo,
+    usuarios: i.usuarios.map((u) => ({
+      nombre: u.usuario.nombre,
+      apellido: u.usuario.apellido,
+      email: u.usuario.email,
+      cargo: u.cargo,
+    })),
+  }));
+
+  res.json(resultado);
+});
+
 // GET /api/instituciones/:idInstitucion: muestra datos públicos de una institución
 
 router.get("/:idInstitucion", autenticar, async (req, res) => {
