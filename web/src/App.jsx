@@ -7,6 +7,7 @@ import { Login } from './components/Login'
 import { PerfilDonante } from './components/PerfilDonante'
 import { PanelInstitucion } from './components/PanelInstitucion'
 import { RegistroInstitucion } from './components/instituciones/RegistroInstitucion'
+import { PanelAdmin } from './components/admin/PanelAdmin'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const PASOS_ALTA = ['Tus datos', 'Activar cuenta', 'Iniciar sesión']
@@ -190,7 +191,11 @@ export default function App() {
             <PanelInstitucion usuario={usuario} token={token} apiUrl={API_URL} onCerrarSesion={handleCerrarSesion} />
           )}
 
-          {vista === 'perfil' && token && !esDonante && usuario?.rol !== 'institucion' && (
+          {vista === 'perfil' && token && usuario?.rol === 'admin' && (
+            <PanelAdmin usuario={usuario} token={token} apiUrl={API_URL} onCerrarSesion={handleCerrarSesion} />
+          )}
+
+          {vista === 'perfil' && token && !esDonante && usuario?.rol !== 'institucion' && usuario?.rol !== 'admin' && (
             <div className="card">
               <h2>Panel de Donante</h2>
               <div className="alert alert-warning">
