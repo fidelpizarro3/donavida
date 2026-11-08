@@ -113,7 +113,7 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
 | C | B | `PATCH /api/necesidades/:idNecesidad/cobertura` | Sumar lo cubierto por una transferencia (13, 14) |
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
-| B | C | `GET /api/inventario/disponibilidad-red` | Buscar unidades en la red antes de convocar (12) |
+| B | C | `GET /api/necesidades/:idNecesidad/cobertura` | Buscar unidades en la red antes de convocar (TAREA-14) ✅ implementado |
 | B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) |
 | B | C | _interno_ `registrarIngresoUnidad(datos, db)` | Cargar las unidades que genera una donación (5, 11) ✅ implementado |
 
@@ -479,6 +479,7 @@ Lista sugerida de donantes para una necesidad `abierta` (TAREA-8). **No guarda n
 - **Orden:** primero grupo exacto, después compatible; dentro de cada uno, el más cercano primero.
 - **Cupo:** suma de lugares libres de las `franja_horaria` abiertas de la institución hasta la `fechaLimite`.
   Si la institución todavía no tiene agenda (DV-10), se usan las unidades que faltan (`segun: "unidades_faltantes"`).
+  Con agenda, el cupo nunca pasa de lo que falta. Las unidades en transferencias en curso no se cuentan como faltantes (TAREA-14).
 - **200:**
   ```json
   {
@@ -612,25 +613,39 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
 
 ### Dominio C — Inventario y red
 
-#### `GET /api/inventario/disponibilidad-red`
+#### `GET /api/necesidades/:idNecesidad/cobertura` ✅ implementado
 
-- **Rol:** `institucion`.
-- **Query:** `grupoSanguineo`, `factorRh`, `componente`, `cantidad`, `idInstitucion` (la que pide).
-- **Qué resuelve C:** solo unidades `disponible` de instituciones `aprobada` (distintas de la que pide) que, después de
-  prestar, sigan por encima de su `stock_minimo`.
-- **200** (ordenado por distancia y por días que le quedan a cada unidad):
+Reemplaza a `GET /api/inventario/disponibilidad-red`: busca cobertura para una necesidad antes de convocar (TAREA-14).
+
+- **Rol:** `institucion`, dueña de la necesidad. La necesidad debe estar `abierta` y dentro de su fecha límite.
+- **Qué resuelve:** solo lee, no modifica nada. Toma unidades `disponible`, no vencidas, del mismo componente y de grupo
+  compatible, de instituciones `aprobada` distintas de la que pide. Cada institución presta lo que supera su
+  `stock_minimo` (por grupo, factor y componente; sin mínimo cargado puede prestar todo), empezando por lo que vence antes.
+- **200** (ordenado por distancia y por días restantes):
   ```json
-  [
-    {
-      "idInstitucion": "<uuid>",
-      "nombre": "Banco de Sangre Regional",
-      "distanciaKm": 6.1,
-      "unidades": [{ "idUnidadSangre": "<uuid>", "codigo": "U-000210", "fechaVencimiento": "2026-10-03", "diasRestantes": 5 }]
-    }
-  ]
+  {
+    "idNecesidad": "<uuid>",
+    "unidadesFaltantes": 3,
+    "enCamino": 1,
+    "cubiertasEnRed": 2,
+    "faltanConvocar": 1,
+    "opciones": [
+      {
+        "idInstitucion": "<uuid>",
+        "nombre": "Banco de Sangre Regional",
+        "distanciaKm": 6.1,
+        "sugeridas": 2,
+        "unidades": [
+          { "idUnidadSangre": "<uuid>", "codigo": "U-000210", "grupoSanguineo": "O", "factorRh": "negativo", "fechaVencimiento": "2026-10-03", "diasRestantes": 5 }
+        ]
+      }
+    ]
+  }
   ```
-  `nombre`, `distanciaKm` y `diasRestantes` son calculados.
-- **200 con `[]`** si no hay cobertura en la red: B convoca donantes por todo lo que falta.
+  `unidadesFaltantes` ya descuenta `enCamino` (unidades en transferencias con `transferencia_item.activo`). Las primeras
+  `sugeridas` unidades de cada opción son las que alcanzan para cubrir lo que falta. Sin cobertura, `opciones` es `[]`.
+- **Errores:** 404 `NO_ENCONTRADO`, 409 `CONFLICTO` si la necesidad no está `abierta` o pasó su fecha límite.
+- **Pendiente:** `POST /api/necesidades/:idNecesidad/cobertura/aceptar`, que depende de `POST /api/transferencias` (DV-13).
 
 #### `POST /api/transferencias`
 

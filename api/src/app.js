@@ -7,6 +7,7 @@ const aptitudRoutes = require('./routes/aptitud.routes');
 const institucionesRoutes = require('./routes/instituciones.routes');
 const necesidadesRoutes = require('./routes/necesidades.routes');
 const convocatoriasRoutes = require('./routes/convocatorias.routes');
+const coberturaRoutes = require('./routes/cobertura.routes');
 const alertasRoutes = require('./routes/alertas.routes');
 const pushRoutes = require('./routes/push.routes');
 const unidadesRoutes = require('./routes/unidades.routes');
@@ -26,6 +27,7 @@ app.use('/api/donantes', aptitudRoutes); // cuestionario y habilitación (TAREA-
 app.use('/api/instituciones', institucionesRoutes);
 app.use('/api/necesidades', necesidadesRoutes);
 app.use('/api/necesidades', convocatoriasRoutes); // selección de donantes a convocar (TAREA-8)
+app.use('/api/necesidades', coberturaRoutes); // búsqueda de cobertura en la red (TAREA-14)
 app.use('/api/alertas', alertasRoutes); // alertas al donante (TAREA-11)
 app.use('/api/push', pushRoutes); // suscripción a notificaciones push (TAREA-11)
 app.use('/api/unidades', unidadesRoutes); // ingreso de unidades de sangre (TAREA-5)

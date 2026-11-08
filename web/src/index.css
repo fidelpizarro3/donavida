@@ -1052,6 +1052,47 @@ input[type='radio'] {
   white-space: nowrap;
 }
 
+/* ─── Cobertura en la red (TAREA-14) ────────────────────────────────────── */
+
+.cobertura-titulo {
+  margin: 0.75rem 0 0;
+}
+
+.cobertura-hospital {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem 0.3rem;
+}
+
+.cobertura-unidades {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.8rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.convocatoria-lista .cobertura-unidades li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: transparent;
+  font-size: 0.85rem;
+}
+
+.cobertura-unidades small {
+  color: var(--text-muted);
+}
+
+.cobertura-nota {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+}
+
 /* ─── Alertas del donante (TAREA-11) ────────────────────────────────────── */
 
 .avisos-push {

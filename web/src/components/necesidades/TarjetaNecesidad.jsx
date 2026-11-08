@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { COMPONENTES, ESTADOS, grupoConFactor, fechaLegible } from './textos'
+import { CoberturaNecesidad } from './CoberturaNecesidad'
 import { ConvocatoriaNecesidad } from './ConvocatoriaNecesidad'
 
 // Una necesidad: qué se pide, cuánto falta (barra de progreso) y, si está abierta,
@@ -8,7 +9,8 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
   const [editando, setEditando] = useState(false)
   const [cantidad, setCantidad] = useState(necesidad.unidadesSolicitadas)
   const [confirmandoCierre, setConfirmandoCierre] = useState(false)
-  const [convocando, setConvocando] = useState(false)
+  // null = nada abierto. TAREA-14: primero 'red' (buscar en otros hospitales), después 'donantes'
+  const [pasoConvocatoria, setPasoConvocatoria] = useState(null)
 
   const estado = ESTADOS[necesidad.estado]
   const estaAbierta = necesidad.estado === 'abierta'
@@ -42,9 +44,9 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         <span>Faltan <strong>{necesidad.unidadesFaltantes}</strong></span>
       </div>
 
-      {estaAbierta && !editando && !confirmandoCierre && !convocando && (
+      {estaAbierta && !editando && !confirmandoCierre && !pasoConvocatoria && (
         <div className="necesidad-acciones">
-          <button type="button" className="btn btn-primary btn-chico" onClick={() => setConvocando(true)} disabled={ocupado}>
+          <button type="button" className="btn btn-primary btn-chico" onClick={() => setPasoConvocatoria('red')} disabled={ocupado}>
             Convocar donantes
           </button>
           <button type="button" className="btn btn-secondary btn-chico" onClick={() => setEditando(true)} disabled={ocupado}>
@@ -56,12 +58,22 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         </div>
       )}
 
-      {convocando && (
+      {pasoConvocatoria === 'red' && (
+        <CoberturaNecesidad
+          necesidad={necesidad}
+          pedir={pedir}
+          onConvocar={() => setPasoConvocatoria('donantes')}
+          onCancelar={() => setPasoConvocatoria(null)}
+          ocupado={ocupado}
+        />
+      )}
+
+      {pasoConvocatoria === 'donantes' && (
         <ConvocatoriaNecesidad
           necesidad={necesidad}
           pedir={pedir}
           onConfirmar={(datos) => onConvocar(necesidad.idNecesidad, datos)}
-          onCancelar={() => setConvocando(false)}
+          onCancelar={() => setPasoConvocatoria(null)}
           ocupado={ocupado}
         />
       )}

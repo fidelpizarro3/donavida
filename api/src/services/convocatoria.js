@@ -11,6 +11,7 @@ const { filtroDonantesHabilitados } = require('./habilitacion');
 const { gruposCompatibles, esGrupoExacto } = require('./compatibilidad');
 const { distanciaKm } = require('./distancia');
 const { inicioDelMes } = require('./alertas');
+const { unidadesEnCamino } = require('./cobertura');
 const { obtenerFechaHoy } = require('../utils/validaciones');
 const { parsearFecha } = require('../utils/formateadores');
 
@@ -100,20 +101,23 @@ async function buscarCandidatos(necesidad, institucion, radioKm) {
 
 // Criterio: la cantidad se ajusta al cupo libre de la agenda (DV-10).
 // Suma los lugares libres de las franjas abiertas desde hoy hasta la fecha límite.
-// Mientras la institución no tenga ninguna franja cargada (DV-10 todavía no está), se usan las unidades que faltan.
+// Mientras la institución no tenga ninguna franja cargada, se usan las unidades que faltan.
+// TAREA-14: nunca se convoca por más de lo que falta, y lo que ya viene en una transferencia no cuenta.
 async function cupoLibre(necesidad) {
   const hoy = parsearFecha(obtenerFechaHoy());
+  const enCamino = await unidadesEnCamino(necesidad.idNecesidad);
+  const faltan = Math.max(0, necesidad.unidadesSolicitadas - necesidad.unidadesCubiertas - enCamino);
   const tieneAgenda = (await prisma.franjaHoraria.count({ where: { idInstitucion: necesidad.idInstitucion } })) > 0;
 
   if (!tieneAgenda) {
-    return { disponible: necesidad.unidadesSolicitadas - necesidad.unidadesCubiertas, segun: 'unidades_faltantes' };
+    return { disponible: faltan, segun: 'unidades_faltantes' };
   }
 
   const franjas = await prisma.franjaHoraria.findMany({
     where: { idInstitucion: necesidad.idInstitucion, cerrada: false, fecha: { gte: hoy, lte: necesidad.fechaLimite } },
   });
-  const disponible = franjas.reduce((total, f) => total + Math.max(0, f.cupoTotal - f.cupoOcupado), 0);
-  return { disponible, segun: 'agenda' };
+  const lugares = franjas.reduce((total, f) => total + Math.max(0, f.cupoTotal - f.cupoOcupado), 0);
+  return { disponible: Math.min(lugares, faltan), segun: 'agenda' };
 }
 
 module.exports = { elegirCanal, armarMotivo, buscarCandidatos, cupoLibre };

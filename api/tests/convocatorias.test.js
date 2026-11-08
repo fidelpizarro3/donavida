@@ -9,6 +9,7 @@ jest.mock('../src/lib/prisma', () => ({
   necesidad: { findFirst: jest.fn(), updateMany: jest.fn() },
   donante: { findMany: jest.fn() },
   franjaHoraria: { count: jest.fn(), findMany: jest.fn() },
+  transferenciaItem: { count: jest.fn() },
   convocatoria: { create: jest.fn() },
   alerta: { createMany: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
@@ -81,6 +82,7 @@ beforeEach(() => {
   prisma.necesidad.findFirst.mockResolvedValue(NECESIDAD);
   prisma.necesidad.updateMany.mockResolvedValue({ count: 0 });
   prisma.franjaHoraria.count.mockResolvedValue(0); // sin agenda cargada: cupo = unidades que faltan (2)
+  prisma.transferenciaItem.count.mockResolvedValue(0); // ninguna unidad en camino
   prisma.donante.findMany.mockResolvedValue([DONANTE_LEJOS, DONANTE_COMPATIBLE, DONANTE_CERCA]);
   prisma.convocatoria.create.mockImplementation(async ({ data }) => ({
     idConvocatoria: ID_CONVOCATORIA,
