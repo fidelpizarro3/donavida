@@ -111,10 +111,10 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | A | B | `GET /api/donaciones?idDonante=` | Historial y cantidad de donaciones para el carné (18) |
 | A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
-| C | B | `PATCH /api/necesidades/:idNecesidad/cobertura` | Sumar lo cubierto por una transferencia (13, 14) |
+| C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (versión mínima: TAREA-13 agrega el aviso de cierre) |
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
 | B | C | `GET /api/inventario/disponibilidad-red` | Buscar unidades en la red antes de convocar (12) |
-| B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) |
+| B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) ✅ implementado (TAREA-12) |
 | B | C | _interno_ `registrarIngresoUnidad(datos, db)` | Cargar las unidades que genera una donación (5, 11) ✅ implementado |
 
 ## 4. Detalle de cada contrato
@@ -518,14 +518,20 @@ El hospital confirma la lista (con los cambios que haya hecho) y se guarda (TARE
 - **Errores:** 400 `DATOS_INVALIDOS` (lista vacía, ids inválidos o repetidos), 404 `NO_ENCONTRADO`,
   409 `CONFLICTO` (necesidad no abierta, más personas que el cupo o alguien que ya no se puede convocar).
 
-#### `PATCH /api/necesidades/:idNecesidad/cobertura`
+#### _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` ✅ implementado
 
-- **Rol:** `institucion`.
-- **Body:** `{ "unidades": 4, "idTransferencia": "<uuid>" }`
-- **Qué hace B:** suma `unidades` a `unidadesCubiertas`. Si no queda nada por cubrir, pasa la necesidad a `cubierta`,
-  completa `cerradaEn` y dispara el aviso de cierre a los donantes (func. 14).
-- **200:** la necesidad actualizada, con la misma forma que en `GET /api/necesidades`.
-- **Errores:** 409 `CONFLICTO` si la necesidad ya no está `abierta`.
+Reemplazan al `PATCH /api/necesidades/:idNecesidad/cobertura` que estaba acordado: la recepción de una
+transferencia (TAREA-12) los llama dentro de su propia transacción, sin una llamada HTTP de la API a sí misma.
+Están en `api/src/services/cierreNecesidad.js`.
+
+- `sumarCobertura`: suma `unidades` a `unidadesCubiertas` solo si la necesidad sigue `abierta` (suma atómica), sin
+  pasarse de `unidadesSolicitadas`, y llama a `cerrarSiCubierta`. Si ya no está abierta no suma nada (las unidades
+  igual entran al stock). Devuelve la necesidad como quedó.
+- `cerrarSiCubierta`: si la necesidad sigue `abierta` y ya tiene todo lo que pidió, la pasa a `cubierta` y completa
+  `cerradaEn`, con un cambio condicional: aunque se llame dos veces, se cierra una sola. Devuelve `true` si la cerró.
+- `db` (opcional): la transacción de quien llama.
+- **Pendiente (TAREA-13):** el aviso de agradecimiento a los donantes, "mantener abierta" la convocatoria y que el
+  registro de la donación (DV-11) también use `cerrarSiCubierta`.
 
 #### `GET /api/estadisticas/convocatorias`
 
@@ -632,19 +638,69 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
   `nombre`, `distanciaKm` y `diasRestantes` son calculados.
 - **200 con `[]`** si no hay cobertura en la red: B convoca donantes por todo lo que falta.
 
-#### `POST /api/transferencias`
+#### Transferencias entre instituciones ✅ implementado (TAREA-12)
 
-- **Rol:** `institucion` (la solicitante).
-- **Body:** `{ "idInstitucionProveedora": "<uuid>", "idNecesidad": "<uuid>", "idsUnidadSangre": ["<uuid>", "<uuid>"] }`
-  (`idNecesidad` es opcional: una transferencia se puede iniciar sin necesidad publicada, func. 13).
-  La institución solicitante sale del usuario autenticado.
-- **Qué hace C:** crea la `transferencia`, un `transferencia_item` por unidad y pasa las unidades a `reservada`,
-  todo en una transacción.
-- **201:** `{ "idTransferencia": "<uuid>", "estado": "pendiente", "plazoRespuesta": "2026-10-05T18:00:00.000Z" }`
-- **Errores:** 409 `CONFLICTO` si alguna unidad ya no está `disponible`.
-- Cuando se confirma la recepción, C llama a `PATCH /api/necesidades/:idNecesidad/cobertura`. Si la institución que
-  presta no responde antes de `plazoRespuesta`, la transferencia pasa a `expirada`, las unidades vuelven a
-  `disponible` y B convoca donantes.
+```
+Transferencia:  pendiente ──aceptar──► aceptada ──recibir──► recibida
+                    ├──rechazar (con motivo)──► rechazada
+                    └──vence el plazo (24 h)──► expirada
+Unidades:       disponible ──(al aceptar)──► reservada ──(al recibir)──► disponible en la institución que pidió
+```
+
+- **Rol:** `institucion`, de una institución `aprobada` (si no, 403). La institución sale del usuario autenticado.
+- Mientras la transferencia está en curso (`pendiente` o `aceptada`), cada unidad tiene su `transferencia_item` con
+  `activo = true`: la base no deja que la misma unidad esté en dos transferencias en curso.
+- Las unidades se reservan recién cuando la que presta **acepta**, y pasan de institución cuando la que pidió confirma la
+  recepción. Una unidad vencida no se puede pedir ni aceptar.
+- Todos los cambios de estado son condicionales y van en una transacción: si dos personas aceptan a la vez, una recibe 409.
+- Si no se responde antes de `plazoRespuesta`, una tarea automática (al arrancar la API y cada hora; no corre en los
+  tests) la pasa a `expirada`: sus unidades dejan de estar en curso, vuelven a contar como faltantes y el hospital
+  convoca donantes por ellas.
+
+**`POST /api/transferencias`** — pedir.
+- **Body:** `{ "idInstitucionProveedora": "<uuid>", "idsUnidadSangre": ["<uuid>", "<uuid>"], "idNecesidad": "<uuid>" }`.
+  `idNecesidad` es opcional: sin ella es un pedido a mano. Entre 1 y 50 unidades, sin repetir.
+- **Valida:** la proveedora está aprobada y no es la propia; las unidades son de ella, `disponible` y no vencidas, y no
+  están en otra transferencia en curso. Con necesidad: es propia, está `abierta` y en fecha, las unidades le sirven
+  (mismo componente, grupo compatible) y no se piden más de las que faltan (contando las que ya vienen en camino).
+- **201:** la transferencia (forma de abajo), `pendiente`, con 24 horas de plazo.
+- **Errores:** 400 `DATOS_INVALIDOS`, 404 `NO_ENCONTRADO` (proveedora, unidad o necesidad), 409 `CONFLICTO`.
+
+**`POST /api/transferencias/:idTransferencia/aceptar`** — la que presta acepta: reserva todas las unidades en una sola
+operación y deja un `movimiento_unidad` de `reserva` por unidad. Si alguna ya no está disponible (se usó o venció), no se
+reserva ninguna (409). 403 si lo intenta la que pidió; 409 si no está `pendiente` o venció el plazo.
+
+**`POST /api/transferencias/:idTransferencia/rechazar`** — la que presta rechaza. **Body:** `{ "motivoRechazo": "..." }`,
+obligatorio (hasta 500 caracteres). Las unidades nunca se reservaron, así que no cambian.
+
+**`POST /api/transferencias/:idTransferencia/recibir`** — la que pidió confirma la recepción: las unidades pasan a su
+institución como `disponible` y queda un `movimiento_unidad` de `transferencia` por unidad (origen y destino). Si está
+ligada a una necesidad, llama a `sumarCobertura`. Una unidad que venció en el camino llega igual y la tarea de
+vencimiento (TAREA-7) la marca como vencida en su destino.
+
+**`GET /api/transferencias?direccion=enviadas|recibidas`** — historial de la institución (sin filtro, las dos).
+
+**`GET /api/transferencias/unidades-disponibles?grupoSanguineo=O&factorRh=negativo&componente=globulos_rojos`** — para
+pedir a mano: las unidades disponibles y no vencidas de otras instituciones aprobadas que no están en otra transferencia
+en curso, agrupadas por institución (la más cercana primero; dentro de cada una, lo que vence antes).
+
+- **Forma de una transferencia** (`direccion` es relativa a quien mira):
+  ```json
+  {
+    "idTransferencia": "<uuid>",
+    "estado": "aceptada",
+    "direccion": "enviada",
+    "institucionSolicitante": { "idInstitucion": "<uuid>", "nombre": "Hospital Central" },
+    "institucionProveedora": { "idInstitucion": "<uuid>", "nombre": "Banco Regional" },
+    "necesidad": { "idNecesidad": "<uuid>", "grupoSanguineo": "O", "factorRh": "negativo", "componente": "globulos_rojos", "unidadesSolicitadas": 2, "unidadesCubiertas": 0, "estado": "abierta" },
+    "unidades": [{ "idUnidadSangre": "<uuid>", "codigo": "U-7K3M9QX2RD", "grupoSanguineo": "O", "factorRh": "negativo", "componente": "globulos_rojos", "fechaVencimiento": "2026-11-20", "estado": "reservada" }],
+    "motivoRechazo": null,
+    "plazoRespuesta": "2026-11-09T18:50:00.000Z",
+    "creadaEn": "2026-11-08T18:50:00.000Z",
+    "recibidaEn": null
+  }
+  ```
+  `necesidad` es `null` en un pedido a mano.
 
 #### `POST /api/unidades` ✅ implementado
 

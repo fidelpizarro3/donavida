@@ -31,6 +31,10 @@ export function DetalleUnidad({ idUnidadSangre, pedir }) {
   if (!detalle) return <p className="texto-suave">Cargando el recorrido...</p>
 
   const ingreso = detalle.movimientos.find((m) => m.tipo === 'ingreso')
+  // TAREA-12: si llegó por una transferencia, se aclara de qué institución vino (la última, si hubo varias)
+  const transferencia = detalle.movimientos.filter((m) => m.tipo === 'transferencia').at(-1)
+  const cargadaPor = ingreso?.institucionDestino?.nombre ?? 'la institución'
+  const origen = detalle.idDonacion ? 'De una donación registrada en DonaVida' : `Cargada a mano por ${cargadaPor}`
 
   return (
     <div className="detalle-unidad">
@@ -41,7 +45,12 @@ export function DetalleUnidad({ idUnidadSangre, pedir }) {
         </div>
         <div>
           <dt>De dónde vino</dt>
-          <dd>{detalle.idDonacion ? 'De una donación registrada en DonaVida' : 'Cargada a mano por la institución'}</dd>
+          <dd>
+            {origen}
+            {transferencia?.institucionOrigen && (
+              <small className="texto-chico">Llegó por una transferencia de {transferencia.institucionOrigen.nombre}</small>
+            )}
+          </dd>
         </div>
         <div>
           <dt>Extracción</dt>
