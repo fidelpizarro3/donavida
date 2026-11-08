@@ -19,3 +19,6 @@ programarVencimientoUnidades();
 // TAREA-10: recordatorio el día anterior al turno, al arrancar y después una vez por hora
 const { programarRecordatorios } = require('./services/recordatorios');
 programarRecordatorios();
+// TAREA-12: las transferencias que no se respondieron a tiempo pasan a expirada, al arrancar y después una vez por hora
+const { programarVencimientoTransferencias } = require('./services/transferencias');
+programarVencimientoTransferencias();
