@@ -5,7 +5,7 @@ import { ConvocatoriaNecesidad } from './ConvocatoriaNecesidad'
 
 // Una necesidad: qué se pide, cuánto falta (barra de progreso) y, si está abierta,
 // los botones para convocar donantes, corregir la cantidad o cerrarla a mano.
-export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, pedir, ocupado }) {
+export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, onPedirUnidades, pedir, ocupado }) {
   const [editando, setEditando] = useState(false)
   const [cantidad, setCantidad] = useState(necesidad.unidadesSolicitadas)
   const [confirmandoCierre, setConfirmandoCierre] = useState(false)
@@ -62,6 +62,7 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         <CoberturaNecesidad
           necesidad={necesidad}
           pedir={pedir}
+          onPedir={(ids) => onPedirUnidades(necesidad.idNecesidad, ids)}
           onConvocar={() => setPasoConvocatoria('donantes')}
           onCancelar={() => setPasoConvocatoria(null)}
           ocupado={ocupado}

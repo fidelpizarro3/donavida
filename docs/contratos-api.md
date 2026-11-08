@@ -625,7 +625,8 @@ Reemplaza a `GET /api/inventario/disponibilidad-red`: busca cobertura para una n
 
 - **Rol:** `institucion`, dueña de la necesidad. La necesidad debe estar `abierta` y dentro de su fecha límite.
 - **Qué resuelve:** solo lee, no modifica nada. Toma unidades `disponible`, no vencidas, del mismo componente y de grupo
-  compatible, de instituciones `aprobada` distintas de la que pide. Cada institución presta lo que supera su
+  compatible, de instituciones `aprobada` distintas de la que pide, que no estén pedidas en otra transferencia en curso.
+  Cada institución presta lo que supera su
   `stock_minimo` (por grupo, factor y componente; sin mínimo cargado puede prestar todo), empezando por lo que vence antes.
 - **200** (ordenado por distancia y por días restantes):
   ```json
@@ -651,7 +652,22 @@ Reemplaza a `GET /api/inventario/disponibilidad-red`: busca cobertura para una n
   `unidadesFaltantes` ya descuenta `enCamino` (unidades en transferencias con `transferencia_item.activo`). Las primeras
   `sugeridas` unidades de cada opción son las que alcanzan para cubrir lo que falta. Sin cobertura, `opciones` es `[]`.
 - **Errores:** 404 `NO_ENCONTRADO`, 409 `CONFLICTO` si la necesidad no está `abierta` o pasó su fecha límite.
-- **Pendiente:** `POST /api/necesidades/:idNecesidad/cobertura/aceptar`, que depende de `POST /api/transferencias` (DV-13).
+
+#### `POST /api/necesidades/:idNecesidad/cobertura/aceptar` ✅ implementado
+
+El hospital acepta la propuesta, o una parte (TAREA-14).
+
+- **Rol:** `institucion`, dueña de la necesidad (abierta y en fecha).
+- **Body:** `{ "idsUnidadSangre": ["<uuid>", "..."] }` (de 1 a 50, sin repetir).
+- **Qué hace B:** vuelve a buscar la cobertura y revisa que cada unidad siga en las opciones (no se usó, no venció, no la
+  pidió otro hospital y el que presta no queda por debajo de su mínimo) y que no se pidan más de las que faltan.
+  Después crea una transferencia por cada hospital que presta con `pedirTransferencia` (TAREA-12), ligada a la
+  necesidad. Cada hospital responde la suya; lo que no se cubra se convoca después, porque el cupo descuenta lo que
+  viene en camino.
+- **201:** `{ "idNecesidad": "<uuid>", "unidadesPedidas": 3, "transferencias": [ <transferencia>, ... ] }` (forma de abajo).
+- **Errores:** 400 `DATOS_INVALIDOS`, 404 `NO_ENCONTRADO`, 409 `CONFLICTO` (necesidad no abierta o vencida, más unidades
+  de las que faltan, o alguna que ya no se puede pedir). Si una transferencia falla después de crear otras, responde el
+  error de la que falló y además `transferencias` con las que sí se pidieron.
 
 #### Transferencias entre instituciones ✅ implementado (TAREA-12)
 

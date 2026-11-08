@@ -15,7 +15,14 @@ jest.mock('../src/lib/prisma', () => ({
   donante: { findMany: jest.fn() },
 }));
 
+// La transferencia en sí (TAREA-12) se prueba en transferencias.test.js: acá solo se ve que se pida bien
+jest.mock('../src/services/transferencias', () => ({
+  ...jest.requireActual('../src/services/transferencias'),
+  pedirTransferencia: jest.fn(),
+}));
+
 const prisma = require('../src/lib/prisma');
+const { pedirTransferencia, ErrorTransferencia } = require('../src/services/transferencias');
 const app = require('../src/app');
 const { gruposCompatibles } = require('../src/services/compatibilidad');
 const { obtenerFechaHoyArgentina } = require('../src/utils/validaciones');
@@ -57,9 +64,10 @@ function enDias(dias) {
 
 let proximoCodigo = 1;
 const unidad = (idInstitucion, dias, datos = {}) => {
-  const codigo = `U-${proximoCodigo++}`;
+  const numero = proximoCodigo++;
+  const codigo = `U-${numero}`;
   return {
-    idUnidadSangre: codigo,
+    idUnidadSangre: `00000000-0000-4000-8000-${String(numero).padStart(12, '0')}`,
     codigo,
     idInstitucion,
     grupoSanguineo: 'A',
@@ -79,6 +87,9 @@ const minimo = (idInstitucion, unidadesMinimas, datos = {}) => ({
 const buscar = (token = tokenDe('institucion'), id = ID_NECESIDAD) =>
   request(app).get(`/api/necesidades/${id}/cobertura`).set('Authorization', `Bearer ${token}`);
 
+const aceptar = (body, token = tokenDe('institucion')) =>
+  request(app).post(`/api/necesidades/${ID_NECESIDAD}/cobertura/aceptar`).set('Authorization', `Bearer ${token}`).send(body);
+
 const proponer = () =>
   request(app)
     .post(`/api/necesidades/${ID_NECESIDAD}/convocatoria/propuesta`)
@@ -96,6 +107,7 @@ beforeEach(() => {
   prisma.franjaHoraria.count.mockResolvedValue(0);
   prisma.franjaHoraria.findMany.mockResolvedValue([]);
   prisma.donante.findMany.mockResolvedValue([]);
+  pedirTransferencia.mockImplementation(async (datos) => ({ idTransferencia: `T-${datos.idInstitucionProveedora}`, estado: 'pendiente' }));
 });
 
 describe('Quién puede buscar', () => {
@@ -139,6 +151,7 @@ describe('Criterio: solo unidades disponibles, no vencidas y compatibles', () =>
       OR: gruposCompatibles(NECESIDAD),
       idInstitucion: { not: ID_INSTITUCION },
       institucion: { estado: 'aprobada' },
+      itemsTransferencia: { none: { activo: true } }, // no las pedidas en otra transferencia en curso
     });
   });
 
@@ -289,5 +302,82 @@ describe('Criterio: la búsqueda no modifica nada', () => {
     expect(prisma.unidadSangre.updateMany).not.toHaveBeenCalled();
     expect(prisma.necesidad.updateMany).not.toHaveBeenCalled();
     expect(prisma.transferencia.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('Criterio: si el hospital acepta, se crea la transferencia (TAREA-12)', () => {
+  const idsDe = (res) => res.body.opciones.flatMap((o) => o.unidades.slice(0, o.sugeridas).map((u) => u.idUnidadSangre));
+
+  test('pide una transferencia por cada hospital, ligada a la necesidad, empezando por el más cercano', async () => {
+    prisma.unidadSangre.findMany.mockResolvedValue([unidad(ID_LEJOS, 10), unidad(ID_CERCA, 20)]);
+    const ids = idsDe(await buscar());
+    const res = await aceptar({ idsUnidadSangre: ids });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ idNecesidad: ID_NECESIDAD, unidadesPedidas: 2 });
+    expect(res.body.transferencias).toHaveLength(2);
+    expect(pedirTransferencia.mock.calls.map(([d]) => d)).toEqual([
+      { idInstitucionSolicitante: ID_INSTITUCION, idInstitucionProveedora: ID_CERCA, idsUnidadSangre: [ids[0]], idNecesidad: ID_NECESIDAD },
+      { idInstitucionSolicitante: ID_INSTITUCION, idInstitucionProveedora: ID_LEJOS, idsUnidadSangre: [ids[1]], idNecesidad: ID_NECESIDAD },
+    ]);
+  });
+
+  test('puede aceptar solo una parte de la propuesta', async () => {
+    prisma.unidadSangre.findMany.mockResolvedValue([unidad(ID_CERCA, 10), unidad(ID_CERCA, 20)]);
+    const [primera] = idsDe(await buscar());
+    const res = await aceptar({ idsUnidadSangre: [primera] });
+    expect(res.status).toBe(201);
+    expect(pedirTransferencia).toHaveBeenCalledTimes(1);
+  });
+
+  test('no deja pedir una unidad que dejaría al hospital por debajo de su mínimo', async () => {
+    const guardada = unidad(ID_CERCA, 30);
+    prisma.unidadSangre.findMany.mockResolvedValue([unidad(ID_CERCA, 10), guardada]);
+    prisma.stockMinimo.findMany.mockResolvedValue([minimo(ID_CERCA, 1)]);
+    const res = await aceptar({ idsUnidadSangre: [guardada.idUnidadSangre] });
+    expect(res.status).toBe(409);
+    expect(res.body.error.mensaje).toMatch(/Volvé a buscar/);
+    expect(pedirTransferencia).not.toHaveBeenCalled();
+  });
+
+  test('no deja pedir una unidad que ya no está en la red (se usó, venció o la pidió otro)', async () => {
+    const res = await aceptar({ idsUnidadSangre: ['00000000-0000-4000-8000-999999999999'] });
+    expect(res.status).toBe(409);
+    expect(pedirTransferencia).not.toHaveBeenCalled();
+  });
+
+  test('no deja pedir más de lo que falta', async () => {
+    prisma.unidadSangre.findMany.mockResolvedValue([unidad(ID_CERCA, 10), unidad(ID_CERCA, 20), unidad(ID_CERCA, 30)]);
+    const res = await buscar();
+    const todas = res.body.opciones[0].unidades.map((u) => u.idUnidadSangre);
+    const pedido = await aceptar({ idsUnidadSangre: todas });
+    expect(pedido.status).toBe(409);
+    expect(pedido.body.error.mensaje).toMatch(/faltan 2/);
+  });
+
+  test('revisa la lista de unidades', async () => {
+    expect((await aceptar({})).status).toBe(400);
+    expect((await aceptar({ idsUnidadSangre: [] })).status).toBe(400);
+    expect((await aceptar({ idsUnidadSangre: ['abc'] })).status).toBe(400);
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect((await aceptar({ idsUnidadSangre: [id, id] })).status).toBe(400);
+  });
+
+  test('un donante no puede aceptar y una necesidad cerrada responde 409', async () => {
+    const body = { idsUnidadSangre: ['00000000-0000-4000-8000-000000000001'] };
+    expect((await aceptar(body, tokenDe('donante'))).status).toBe(403);
+    prisma.necesidad.findFirst.mockResolvedValue({ ...NECESIDAD, estado: 'cerrada_manual' });
+    expect((await aceptar(body)).status).toBe(409);
+  });
+
+  test('si la transferencia con un hospital falla, avisa qué se pidió y con quién falló', async () => {
+    prisma.unidadSangre.findMany.mockResolvedValue([unidad(ID_CERCA, 10), unidad(ID_LEJOS, 20)]);
+    const ids = idsDe(await buscar());
+    pedirTransferencia
+      .mockResolvedValueOnce({ idTransferencia: 'T-1', estado: 'pendiente' })
+      .mockRejectedValueOnce(new ErrorTransferencia(409, 'CONFLICTO', 'La unidad U-9 ya está pedida en otra transferencia en curso'));
+    const res = await aceptar({ idsUnidadSangre: ids });
+    expect(res.status).toBe(409);
+    expect(res.body.error.mensaje).toBe('Se pidió 1 transferencia, pero otra no: La unidad U-9 ya está pedida en otra transferencia en curso');
+    expect(res.body.transferencias).toEqual([{ idTransferencia: 'T-1', estado: 'pendiente' }]);
   });
 });

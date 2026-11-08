@@ -2,7 +2,8 @@
 //
 // Esta búsqueda NO modifica nada: solo lee. Por eso no llama a marcarVencidas() (que escribe en la base)
 // y filtra las unidades vencidas por fecha.
-//   1) Trae las unidades disponibles, no vencidas y compatibles de las otras instituciones aprobadas.
+//   1) Trae las unidades disponibles, no vencidas y compatibles de las otras instituciones aprobadas
+//      que no estén pedidas en otra transferencia en curso (TAREA-12).
 //   2) Cada institución presta lo que le sobra de su stock mínimo, empezando por lo que vence antes.
 //   3) Ordena por distancia y por días restantes, y sugiere unidades hasta cubrir lo que falta.
 const prisma = require('../lib/prisma');
@@ -99,6 +100,8 @@ async function buscarCoberturaEnRed(necesidad) {
       OR: gruposCompatibles(necesidad),
       idInstitucion: { not: necesidad.idInstitucion },
       institucion: { estado: 'aprobada' },
+      // Una unidad pedida en otra transferencia en curso sigue "disponible" hasta que la acepten: no se ofrece
+      itemsTransferencia: { none: { activo: true } },
     },
     include: { institucion: { select: { nombre: true, latitud: true, longitud: true } } },
   });
