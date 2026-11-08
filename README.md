@@ -134,6 +134,11 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `PUT /api/unidades/stock-minimo` | Define el stock mínimo de un grupo, factor y componente. Body: `{ grupoSanguineo, factorRh, componente, unidadesMinimas }` |
 | `PATCH /api/unidades/:idUnidadSangre/usar` | Usa una unidad disponible: sale del stock y queda el movimiento de uso |
 | `POST /api/unidades/:idUnidadSangre/descartar` | Confirma el descarte de una unidad vencida: pasa a descartada y queda el movimiento de descarte. Las vencidas las marca solo la API, al arrancar y cada hora |
+| `POST /api/transferencias` | Pedirle unidades a otra institución, a mano o para una necesidad abierta. Body: `{ idInstitucionProveedora, idsUnidadSangre, idNecesidad? }`. La otra tiene 24 horas para responder |
+| `POST /api/transferencias/:id/aceptar` y `/rechazar` | La institución que presta acepta (las unidades quedan reservadas) o rechaza (con `motivoRechazo` obligatorio) |
+| `POST /api/transferencias/:id/recibir` | La que pidió confirma la recepción: las unidades pasan a su stock y, si era para una necesidad, se suman a lo cubierto |
+| `GET /api/transferencias` | Historial de la institución, enviadas y recibidas (`?direccion=enviadas\|recibidas`). Las que no se respondieron a tiempo pasan solas a expirada |
+| `GET /api/transferencias/unidades-disponibles` | Para pedir a mano: unidades de un grupo y componente en otras instituciones (`?grupoSanguineo=&factorRh=&componente=`) |
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.
