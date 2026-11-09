@@ -8,6 +8,7 @@ const ESTADOS_ALERTA = {
   enviada: { texto: 'Sin responder', clase: 'badge-info' },
   aceptada: { texto: 'Aceptada', clase: 'badge-success' },
   rechazada: { texto: 'Rechazada', clase: 'badge-neutro' },
+  cancelada: { texto: 'Ya no hace falta', clase: 'badge-neutro' }, // TAREA-13: la necesidad se cubrió antes
 }
 
 // TAREA-11 en el front: el donante ve las alertas que le llegaron (motivo, hospital y distancia)
@@ -114,6 +115,10 @@ export function MisAlertas({ token, apiUrl, onRespondida }) {
               )}
               {alerta.estado === 'enviada' && !alerta.puedeResponder && (
                 <p className="texto-suave">La institución ya no necesita esta donación. ¡Gracias igual!</p>
+              )}
+              {/* TAREA-13: el agradecimiento también queda acá, además del aviso por su canal */}
+              {alerta.estado === 'cancelada' && (
+                <p className="texto-suave">¡Gracias! {institucion.nombre} ya consiguió la sangre que necesitaba: no hace falta que vayas.</p>
               )}
             </article>
           )

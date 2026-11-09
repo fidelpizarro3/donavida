@@ -253,6 +253,9 @@ model ConsultaAsistente {
 
 // ─── Demanda y convocatoria ──────────────────────────────────────────────────
 
+// CORRECCIÓN 6 (TAREA-13): se agrega cubierta_con (con qué se cubrió: donantes, transferencia o las dos).
+// Se guarda al cubrirse porque después pueden seguir llegando donaciones (turnos que se mantienen o una
+// convocatoria que sigue abierta para reponer stock) que ya no cuentan para la necesidad.
 model Necesidad {
   idNecesidad         String          @id @default(uuid()) @map("id_necesidad") @db.Uuid
   idInstitucion       String          @map("id_institucion") @db.Uuid
@@ -266,6 +269,7 @@ model Necesidad {
   estado              EstadoNecesidad @default(abierta)
   creadaEn            DateTime        @default(now()) @map("creada_en")
   cerradaEn           DateTime?       @map("cerrada_en")
+  cubiertaCon         CubiertaCon?    @map("cubierta_con") // null mientras no esté cubierta
 
   institucion    Institucion     @relation(fields: [idInstitucion], references: [idInstitucion])
   convocatorias  Convocatoria[]
@@ -274,6 +278,8 @@ model Necesidad {
   @@map("necesidad")
 }
 
+// CORRECCIÓN 6 (TAREA-13): se agregan mantener_abierta (el hospital la deja abierta aunque la necesidad
+// se cubra, para reponer stock) y decision_turnos (qué decidió el hospital con los que ya tenían turno).
 model Convocatoria {
   idConvocatoria       String             @id @default(uuid()) @map("id_convocatoria") @db.Uuid
   idNecesidad          String             @map("id_necesidad") @db.Uuid
@@ -282,6 +288,8 @@ model Convocatoria {
   estado               EstadoConvocatoria @default(propuesta)
   idUsuarioConfirmador String?            @map("id_usuario_confirmador") @db.Uuid // null hasta que el hospital confirma (func. 8)
   creadaEn             DateTime           @default(now()) @map("creada_en")
+  mantenerAbierta      Boolean            @default(false) @map("mantener_abierta")
+  decisionTurnos       DecisionTurnos?    @map("decision_turnos") // null hasta que el hospital decide
 
   necesidad          Necesidad @relation(fields: [idNecesidad], references: [idNecesidad])
   usuarioConfirmador Usuario?  @relation(fields: [idUsuarioConfirmador], references: [idUsuario])
@@ -580,6 +588,23 @@ enum EstadoConvocatoria {
   cerrada
 
   @@map("estado_convocatoria")
+}
+
+// TAREA-13: con qué se cubrió una necesidad
+enum CubiertaCon {
+  donantes
+  transferencia
+  ambas
+
+  @@map("cubierta_con")
+}
+
+// TAREA-13: qué pasa con los que tenían turno cuando la necesidad se cubre
+enum DecisionTurnos {
+  mantener
+  reprogramar
+
+  @@map("decision_turnos")
 }
 
 enum CanalAlerta {

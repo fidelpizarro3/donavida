@@ -13,6 +13,7 @@ const {
 } = require('../utils/validaciones');
 const { formatearFecha, parsearFecha } = require('../utils/formateadores');
 const { enCaminoPorNecesidad } = require('../services/cobertura');
+const { cerrarSiCubierta, enviarAgradecimientos, convocatoriasPorNecesidad } = require('../services/cierreNecesidad');
 
 const router = Router();
 
@@ -45,6 +46,8 @@ function mapearNecesidad(necesidad) {
         estado: necesidad.estado,
         creadaEn: necesidad.creadaEn,
         cerradaEn: necesidad.cerradaEn,
+        // TAREA-13: con qué se cubrió ('donantes', 'transferencia' o 'ambas'); null si no está cubierta
+        cubiertaCon: necesidad.cubiertaCon ?? null,
     };
 }
 
@@ -152,8 +155,15 @@ router.get('/', autorizar('institucion', 'admin'), async (req, res) => {
     await cerrarVencidas();
     const necesidades = await prisma.necesidad.findMany({ where: filtro, orderBy: { fechaLimite: 'asc' } });
     // TAREA-14: lo pedido a otros hospitales todavía no está cubierto (suma al recibirlo), pero se muestra aparte
-    const enCamino = await enCaminoPorNecesidad(necesidades.map((n) => n.idNecesidad));
-    res.json(necesidades.map((n) => ({ ...mapearNecesidad(n), unidadesEnCamino: enCamino.get(n.idNecesidad) ?? 0 })));
+    const ids = necesidades.map((n) => n.idNecesidad);
+    const enCamino = await enCaminoPorNecesidad(ids);
+    // TAREA-13: sus convocatorias, para mantenerlas abiertas y decidir qué pasa con los turnos al cubrirse
+    const convocatorias = await convocatoriasPorNecesidad(ids);
+    res.json(necesidades.map((n) => ({
+        ...mapearNecesidad(n),
+        unidadesEnCamino: enCamino.get(n.idNecesidad) ?? 0,
+        convocatorias: convocatorias.get(n.idNecesidad) ?? [],
+    })));
 });
 
 // 3) PATCH /api/necesidades/:idNecesidad: corregir la cantidad pedida
@@ -177,17 +187,14 @@ router.patch('/:idNecesidad', autorizar('institucion'), async (req, res) => {
         return responderError(res, 409, 'CONFLICTO', `Ya hay ${necesidad.unidadesCubiertas} unidades cubiertas: no se puede pedir menos`);
     }
 
-    const cambios = { unidadesSolicitadas };
-    // Si lo pedido queda igual a lo que ya está cubierto, la necesidad se da por cubierta
-    if (unidadesSolicitadas === necesidad.unidadesCubiertas) {
-        cambios.estado = 'cubierta';
-        cambios.cerradaEn = new Date();
-    }
-
-    const actualizada = await prisma.necesidad.update({
-        where: { idNecesidad: necesidad.idNecesidad },
-        data: cambios,
+    // Si lo pedido queda igual a lo que ya está cubierto, la necesidad se da por cubierta.
+    // TAREA-13: se cierra igual que cuando llega la última unidad (cierra la convocatoria y se agradece)
+    const actualizada = await prisma.$transaction(async (tx) => {
+        await tx.necesidad.update({ where: { idNecesidad: necesidad.idNecesidad }, data: { unidadesSolicitadas } });
+        await cerrarSiCubierta(necesidad.idNecesidad, tx);
+        return tx.necesidad.findUnique({ where: { idNecesidad: necesidad.idNecesidad } });
     });
+    if (actualizada.estado === 'cubierta') await enviarAgradecimientos(actualizada.idNecesidad);
     res.json(mapearNecesidad(actualizada));
 });
 

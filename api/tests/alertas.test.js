@@ -189,7 +189,9 @@ describe('GET /api/alertas/mias', () => {
     // Solo las suyas y solo las que ya le llegaron
     const { where } = prisma.alerta.findMany.mock.calls[0][0];
     expect(where.donante).toEqual({ idUsuario: ID_USUARIO });
-    expect(where.estado.in).not.toContain('pendiente');
+    expect(where.OR[0].estado.in).not.toContain('pendiente');
+    // TAREA-13: de las canceladas, solo las que le habían llegado (las del agradecimiento)
+    expect(where.OR[1]).toEqual({ estado: 'cancelada', enviadaEn: { not: null } });
   });
 
   test('una institución no puede verlas', async () => {

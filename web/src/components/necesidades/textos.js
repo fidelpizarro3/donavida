@@ -12,6 +12,20 @@ export const ESTADOS = {
   vencida: { texto: 'Vencida (no cubierta)', clase: 'badge-warning' },
 }
 
+// TAREA-13: con qué se cubrió una necesidad (queda en el historial)
+export const CUBIERTA_CON = {
+  donantes: 'Se cubrió con donantes',
+  transferencia: 'Se cubrió con transferencias de otros hospitales',
+  ambas: 'Se cubrió con donantes y transferencias de otros hospitales',
+}
+
+// TAREA-13: "le avisamos a 1 persona que ya no hace falta que vaya" / "les avisamos a 3 personas que ... vayan"
+export function avisamosQueNoVayan(cantidad) {
+  return cantidad === 1
+    ? 'le avisamos a 1 persona que ya no hace falta que vaya'
+    : `les avisamos a ${cantidad} personas que ya no hace falta que vayan`
+}
+
 // Por dónde le llega el aviso al donante (TAREA-8)
 export const CANALES = {
   push: 'celular',

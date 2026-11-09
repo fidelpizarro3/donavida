@@ -43,15 +43,18 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
         // El turno trae el id de su alerta: de ahí salen el hospital y la fecha límite de la necesidad
         const alerta = alertas.find((a) => a.idAlerta === turno.idAlerta)
         const franjas = await pedir(`/api/franjas/disponibles?idInstitucion=${turno.idInstitucion}`)
+        // TAREA-13: si la necesidad se cubrió y el hospital le pidió reprogramar, puede elegir cualquier día
+        const sinLimite = alerta?.decisionTurnos === 'reprogramar'
         return {
           turno: { ...turno, institucion: alerta?.institucion },
           alerta,
           // Para reprogramar: otros horarios del mismo hospital, antes de la fecha límite
-          franjas: franjas.filter((f) => f.fecha <= (alerta?.necesidad.fechaLimite ?? f.fecha)),
+          franjas: sinLimite ? franjas : franjas.filter((f) => f.fecha <= (alerta?.necesidad.fechaLimite ?? f.fecha)),
         }
       }
 
-      const alerta = alertas.find((a) => a.estado === 'aceptada' && a.necesidad.estado === 'abierta')
+      // TAREA-13: la convocatoria tiene que seguir recibiendo donantes (abierta, o mantenida abierta para reponer stock)
+      const alerta = alertas.find((a) => a.estado === 'aceptada' && a.convocatoriaAbierta)
       if (!alerta) return { turno: null, alerta: null, franjas: [] }
 
       const libres = await pedir(`/api/franjas/disponibles?idInstitucion=${alerta.institucion.idInstitucion}`)
@@ -165,6 +168,18 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
             {sinConexion && (
               <div className="alert alert-warning">Estás sin conexión: te mostramos el turno que tenías guardado.</div>
             )}
+            {/* TAREA-13: la necesidad se cubrió y el hospital decidió qué pasa con los turnos */}
+            {alerta?.decisionTurnos === 'reprogramar' && (
+              <div className="alert alert-warning">
+                {alerta.institucion.nombre} ya consiguió la sangre que necesitaba y te pide que elijas otro día para donar.
+                Tu turno sigue reservado hasta que lo cambies.
+              </div>
+            )}
+            {alerta?.decisionTurnos === 'mantener' && (
+              <p className="texto-suave">
+                {alerta.institucion.nombre} ya cubrió esta necesidad, pero tu turno sigue en pie: tu donación va a reponer su stock.
+              </p>
+            )}
             <div className="turno-ticket">
               <div className="ficha-fecha ficha-fecha-grande">
                 <span>{dia}</span>
@@ -197,7 +212,7 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
                   <a className="btn btn-primary btn-chico" href={mapa} target="_blank" rel="noreferrer">Cómo llegar</a>
                 )}
                 <button type="button" className="btn btn-secondary btn-chico" onClick={() => setModo('reprogramar')} disabled={ocupado}>
-                  Cambiar horario
+                  {alerta?.decisionTurnos === 'reprogramar' ? 'Elegir otro día' : 'Cambiar horario'}
                 </button>
                 <button type="button" className="btn btn-secondary btn-chico" onClick={() => setModo('cancelar')} disabled={ocupado}>
                   No puedo ir

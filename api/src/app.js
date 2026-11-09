@@ -16,6 +16,7 @@ const turnosRoutes = require('./routes/turnos.routes');
 const donacionesRoutes = require('./routes/donaciones.routes');
 const publicoRoutes = require('./routes/publico.routes');
 const transferenciasRoutes = require('./routes/transferencias.routes');
+const cierreRoutes = require('./routes/cierre.routes');
 
 const app = express();
 app.use(cors());
@@ -37,6 +38,7 @@ app.use('/api/turnos', turnosRoutes); // reserva de turnos del donante (TAREA-10
 app.use('/api/donaciones', donacionesRoutes); // registro de la donación e historial (DV-11)
 app.use('/api/publico', publicoRoutes); // datos de la página de inicio, sin login
 app.use('/api/transferencias', transferenciasRoutes); // transferencias entre instituciones (TAREA-12)
+app.use('/api/convocatorias', cierreRoutes); // qué pasa con la convocatoria cuando la necesidad se cubre (TAREA-13)
 
 // Express 5 manda acá también los errores de las rutas async, sin necesidad de try/catch
 app.use((err, req, res, next) => {
