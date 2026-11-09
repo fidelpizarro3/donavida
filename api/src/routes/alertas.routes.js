@@ -3,12 +3,17 @@ const { Router } = require('express');
 const prisma = require('../lib/prisma');
 const { autenticar, autorizar } = require('../middlewares/auth');
 const { formatearFecha } = require('../utils/formateadores');
+const { recibeDonantes } = require('../services/cierreNecesidad');
 
 const router = Router();
 
 const UUID_VALIDO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // El donante solo ve las que ya le llegaron: las pendientes todavía no se mandaron y las canceladas nunca salieron
 const ESTADOS_VISIBLES = ['enviada', 'aceptada', 'rechazada'];
+// TAREA-13: salvo las que se cancelaron porque la necesidad se cubrió antes de que fuera (esas sí le llegaron,
+// tienen enviada_en, y con ellas el agradecimiento). Las que cancela el tope del mes o la pausa nunca salen.
+const ALERTAS_VISIBLES = { OR: [{ estado: { in: ESTADOS_VISIBLES } }, { estado: 'cancelada', enviadaEn: { not: null } }] };
+const esVisible = (alerta) => ESTADOS_VISIBLES.includes(alerta.estado) || (alerta.estado === 'cancelada' && alerta.enviadaEn != null);
 
 // Lo que hace falta traer de la base para armar la respuesta
 const DATOS_ALERTA = {
@@ -31,6 +36,9 @@ function responderError(res, estado, codigo, mensaje) {
 // Criterio: la alerta muestra el motivo, el hospital y la distancia
 function mapearAlerta(alerta) {
     const { necesidad } = alerta.convocatoria;
+    // TAREA-13: la convocatoria sigue recibiendo donantes mientras la necesidad está abierta,
+    // o si el hospital la mantuvo abierta para reponer stock aunque ya esté cubierta
+    const convocatoriaAbierta = recibeDonantes(alerta.convocatoria, necesidad);
     return {
         idAlerta: alerta.idAlerta,
         estado: alerta.estado,
@@ -39,8 +47,10 @@ function mapearAlerta(alerta) {
         distanciaKm: Number(alerta.distanciaKm),
         enviadaEn: alerta.enviadaEn,
         respondidaEn: alerta.respondidaEn,
-        // Solo se puede responder si todavía no respondió y la necesidad sigue abierta
-        puedeResponder: alerta.estado === 'enviada' && necesidad.estado === 'abierta',
+        // Solo se puede responder si todavía no respondió y la convocatoria sigue abierta
+        puedeResponder: alerta.estado === 'enviada' && convocatoriaAbierta,
+        convocatoriaAbierta, // TAREA-13: con la alerta aceptada, si todavía puede reservar turno
+        decisionTurnos: alerta.convocatoria.decisionTurnos ?? null, // TAREA-13: 'reprogramar' si el hospital pidió otro día
         institucion: {
             ...necesidad.institucion,
             // Para el botón "cómo llegar" (Prisma devuelve Decimal: se pasa a número)
@@ -67,17 +77,22 @@ async function buscarAlertaPropia(idAlerta, idUsuario) {
     });
 }
 
-// Aceptar y rechazar hacen lo mismo, cambia solo el estado final
+// Aceptar y rechazar hacen lo mismo, cambia solo el estado final.
+// Si no se puede, responde el error y devuelve null (así la ruta sabe que ya se respondió)
 async function responderAlerta(req, res, nuevoEstado) {
     const alerta = await buscarAlertaPropia(req.params.idAlerta, req.usuario.id);
-    if (!alerta || !ESTADOS_VISIBLES.includes(alerta.estado)) {
-        return responderError(res, 404, 'NO_ENCONTRADO', 'La alerta no existe');
+    if (!alerta || !esVisible(alerta)) {
+        responderError(res, 404, 'NO_ENCONTRADO', 'La alerta no existe');
+        return null;
     }
-    if (alerta.estado !== 'enviada') {
-        return responderError(res, 409, 'CONFLICTO', `Ya respondiste esta alerta (quedó ${alerta.estado})`);
+    if (alerta.estado === 'aceptada' || alerta.estado === 'rechazada') {
+        responderError(res, 409, 'CONFLICTO', `Ya respondiste esta alerta (quedó ${alerta.estado})`);
+        return null;
     }
-    if (alerta.convocatoria.necesidad.estado !== 'abierta') {
-        return responderError(res, 409, 'CONFLICTO', 'La institución ya no necesita esta donación. ¡Gracias igual!');
+    // TAREA-13: cancelada = la necesidad se cubrió y ya se le agradeció; o la convocatoria ya no recibe donantes
+    if (alerta.estado === 'cancelada' || !recibeDonantes(alerta.convocatoria, alerta.convocatoria.necesidad)) {
+        responderError(res, 409, 'CONFLICTO', 'La institución ya no necesita esta donación. ¡Gracias igual!');
+        return null;
     }
 
     const actualizada = await prisma.alerta.update({
@@ -95,7 +110,7 @@ router.use(autenticar, autorizar('donante'));
 // 1) GET /api/alertas/mias: las alertas que le llegaron al donante, la más nueva primero
 router.get('/mias', async (req, res) => {
     const alertas = await prisma.alerta.findMany({
-        where: { donante: { idUsuario: req.usuario.id }, estado: { in: ESTADOS_VISIBLES } },
+        where: { donante: { idUsuario: req.usuario.id }, ...ALERTAS_VISIBLES },
         include: DATOS_ALERTA,
         orderBy: { enviadaEn: 'desc' },
     });

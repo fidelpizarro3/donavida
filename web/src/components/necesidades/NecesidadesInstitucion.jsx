@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FormularioNecesidad } from './FormularioNecesidad'
 import { TarjetaNecesidad } from './TarjetaNecesidad'
-import { ESTADOS } from './textos'
+import { ESTADOS, avisamosQueNoVayan } from './textos'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 import { Esqueleto } from '../comunes/Esqueleto'
 
@@ -17,8 +17,9 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
   const [error, setError] = useState(null)
 
   // Hace el pedido con el token. Si la API responde un error, lo lanza con su mensaje.
-  const pedir = useCallback(async (ruta, opciones = {}) => {
-    const res = await fetch(`${apiUrl}/api/necesidades${ruta}`, {
+  // "ruta" va desde /api (TAREA-13 también usa /api/convocatorias)
+  const llamar = useCallback(async (ruta, opciones = {}) => {
+    const res = await fetch(`${apiUrl}/api${ruta}`, {
       ...opciones,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     })
@@ -26,6 +27,7 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
     if (!res.ok) throw new Error(data.error?.mensaje || 'Error al comunicarse con el servidor')
     return data
   }, [apiUrl, token])
+  const pedir = useCallback((ruta, opciones) => llamar(`/necesidades${ruta}`, opciones), [llamar])
 
   // Cada vez que cambia esto, se vuelve a pedir la lista (después de publicar, corregir o cerrar)
   const [version, setVersion] = useState(0)
@@ -49,14 +51,14 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
   }
 
   // Ejecuta una acción (publicar, corregir, cerrar), muestra el resultado y recarga la lista.
-  // Devuelve true si salió bien.
+  // textoExito puede ser una función que arma el texto con la respuesta. Devuelve true si salió bien.
   const ejecutar = async (accion, textoExito) => {
     setOcupado(true)
     setMensaje(null)
     setError(null)
     try {
-      await accion()
-      setMensaje(textoExito)
+      const datos = await accion()
+      setMensaje(typeof textoExito === 'function' ? textoExito(datos) : textoExito)
       setVersion((v) => v + 1) // recarga la lista
       return true
     } catch (err) {
@@ -94,6 +96,35 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
       `Pedido enviado: ${idsUnidadSangre.length} ${idsUnidadSangre.length === 1 ? 'unidad' : 'unidades'}. Seguilo en la pestaña Transferencias.`
     )
 
+  // TAREA-13: dejar la convocatoria abierta aunque la necesidad se cubra, o cerrarla (y agradecer)
+  const mantenerAbierta = (idConvocatoria, mantener) =>
+    ejecutar(
+      () => llamar(`/convocatorias/${idConvocatoria}/mantener-abierta`, { method: 'POST', body: JSON.stringify({ mantener }) }),
+      (datos) => {
+        if (datos.estado === 'cerrada') {
+          return datos.agradecidos > 0 ? `Convocatoria cerrada: ${avisamosQueNoVayan(datos.agradecidos)}.` : 'Convocatoria cerrada.'
+        }
+        return mantener
+          ? 'Listo: la convocatoria va a seguir abierta aunque se cubra la necesidad.'
+          : 'Listo: la convocatoria se va a cerrar cuando se cubra la necesidad.'
+      }
+    )
+
+  // TAREA-13: con los que tenían turno, mantenerlos o pedirles que reprogramen
+  const decidirTurnos = (idConvocatoria, accion) =>
+    ejecutar(
+      () => llamar(`/convocatorias/${idConvocatoria}/turnos`, { method: 'PATCH', body: JSON.stringify({ accion }) }),
+      (datos) => {
+        if (accion === 'mantener') return 'Listo: los que tenían turno lo mantienen.'
+        if (datos.avisados === datos.turnosReservados) {
+          return datos.avisados === 1
+            ? 'Le avisamos a 1 persona para que elija otro día.'
+            : `Les avisamos a ${datos.avisados} personas para que elijan otro día.`
+        }
+        return `Les avisamos a ${datos.avisados} de ${datos.turnosReservados}: los demás lo van a ver al entrar a DonaVida.`
+      }
+    )
+
   return (
     <>
       <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
@@ -127,6 +158,8 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
               onCerrar={cerrar}
               onConvocar={convocar}
               onPedirUnidades={pedirUnidades}
+              onMantenerAbierta={mantenerAbierta}
+              onDecidirTurnos={decidirTurnos}
               pedir={pedir}
               ocupado={ocupado}
             />

@@ -15,7 +15,7 @@ const { formatearFecha, parsearFecha } = require('../utils/formateadores');
 const { gruposCompatibles } = require('./compatibilidad');
 const { distanciaKm } = require('./distancia');
 const { calcularDiasRestantes, marcarVencidas } = require('./unidades');
-const { sumarCobertura } = require('./cierreNecesidad');
+const { sumarCobertura, enviarAgradecimientos } = require('./cierreNecesidad');
 
 // Cuánto tiene la institución que presta para contestar
 const PLAZO_RESPUESTA_HORAS = 24;
@@ -291,7 +291,7 @@ async function rechazarTransferencia({ idTransferencia, idInstitucion, motivoRec
 // Criterio: las unidades pasan a la otra institución y queda un movimiento por cada una (origen y destino).
 // Criterio: si está ligada a una necesidad, suma las unidades a lo cubierto y la cierra si se completó.
 async function recibirTransferencia({ idTransferencia, idInstitucion, idUsuario }) {
-  await prisma.$transaction(async (tx) => {
+  const necesidad = await prisma.$transaction(async (tx) => {
     const { count } = await tx.transferencia.updateMany({
       where: { idTransferencia, idInstitucionSolicitante: idInstitucion, estado: 'aceptada' },
       data: { estado: 'recibida', recibidaEn: new Date() },
@@ -320,14 +320,16 @@ async function recibirTransferencia({ idTransferencia, idInstitucion, idUsuario 
     });
     await tx.transferenciaItem.updateMany({ where: { idTransferencia }, data: { activo: false } });
 
-    if (transferencia.idNecesidad) {
-      await sumarCobertura(transferencia.idNecesidad, ids.length, tx);
-    }
+    if (!transferencia.idNecesidad) return null;
+    return sumarCobertura(transferencia.idNecesidad, ids.length, tx);
   });
 
   // Caso borde: una unidad que venció entre que se aceptó y se recibió llega igual (ya está en este hospital)
   // y la tarea de vencimiento la marca como vencida en su nuevo destino, ahora mismo
   await marcarVencidas();
+
+  // TAREA-13: si la necesidad quedó cubierta, se les agradece a los donantes que todavía no habían ido
+  if (necesidad?.estado === 'cubierta') await enviarAgradecimientos(necesidad.idNecesidad);
 
   return obtenerTransferencia(idTransferencia, idInstitucion);
 }

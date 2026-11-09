@@ -107,4 +107,63 @@ async function enviarCorreoRecordatorio({ email, nombre, institucion, direccion,
   });
 }
 
-module.exports = { enviarCorreoVerificacion, enviarCorreoAlerta, enviarCorreoRecordatorio };
+// TAREA-13 (DV-14): la necesidad se cubrió antes de que el donante fuera. Se le avisa que no hace falta
+// que vaya y se le agradece igual (criterio: "el que viaja al hospital para nada no vuelve más")
+async function enviarCorreoAgradecimiento({ email, nombre, institucion }) {
+  await transporte.sendMail({
+    from: REMITENTE,
+    to: email,
+    subject: `¡Gracias! Ya no hace falta que vayas a ${institucion}`,
+    text: [
+      `Hola ${nombre}:`,
+      '',
+      `${institucion} ya consiguió la sangre que necesitaba, así que no hace falta que vayas.`,
+      'Gracias por estar: te vamos a avisar la próxima vez que haga falta.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f1a1a">
+        <h1 style="color:#c92a2a;font-size:24px;margin:0 0 24px">DonaVida</h1>
+        <p style="font-size:16px;line-height:1.5">Hola ${escaparHtml(nombre)}:</p>
+        <p style="font-size:16px;line-height:1.5"><strong>${escaparHtml(institucion)}</strong> ya consiguió la sangre que necesitaba, así que <strong>no hace falta que vayas</strong>.</p>
+        <p style="font-size:16px;line-height:1.5">¡Gracias por estar! Te vamos a avisar la próxima vez que haga falta.</p>
+      </div>`,
+  });
+}
+
+// TAREA-13 (DV-14): la necesidad se cubrió y el hospital pide a los que tenían turno que elijan otro día
+async function enviarCorreoReprogramar({ email, nombre, institucion, fecha, horaInicio, horaFin }) {
+  const enlace = process.env.APP_URL || 'http://localhost:5173';
+  await transporte.sendMail({
+    from: REMITENTE,
+    to: email,
+    subject: `${institucion} te pide cambiar el día de tu turno`,
+    text: [
+      `Hola ${nombre}:`,
+      '',
+      `${institucion} ya consiguió la sangre que necesitaba y te pide que elijas otro día para donar.`,
+      `Tu turno del ${fecha} (de ${horaInicio} a ${horaFin}) sigue reservado hasta que lo cambies.`,
+      '',
+      `Elegí otro horario en DonaVida: ${enlace}`,
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f1a1a">
+        <h1 style="color:#c92a2a;font-size:24px;margin:0 0 24px">DonaVida</h1>
+        <p style="font-size:16px;line-height:1.5">Hola ${escaparHtml(nombre)}:</p>
+        <p style="font-size:16px;line-height:1.5"><strong>${escaparHtml(institucion)}</strong> ya consiguió la sangre que necesitaba y te pide que <strong>elijas otro día</strong> para donar.</p>
+        <div style="background:#f4eeec;border-radius:12px;padding:16px 20px;margin:24px 0">
+          <p style="margin:0;font-size:15px">Tu turno del <strong>${escaparHtml(fecha)}</strong>, de ${horaInicio} a ${horaFin}, sigue reservado hasta que lo cambies.</p>
+        </div>
+        <p style="text-align:center;margin:24px 0">
+          <a href="${enlace}" style="background:#c92a2a;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:999px;display:inline-block">Elegir otro día</a>
+        </p>
+      </div>`,
+  });
+}
+
+module.exports = {
+  enviarCorreoVerificacion,
+  enviarCorreoAlerta,
+  enviarCorreoRecordatorio,
+  enviarCorreoAgradecimiento,
+  enviarCorreoReprogramar,
+};

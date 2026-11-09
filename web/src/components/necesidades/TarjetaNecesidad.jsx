@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { COMPONENTES, ESTADOS, grupoConFactor, fechaLegible } from './textos'
+import { COMPONENTES, ESTADOS, CUBIERTA_CON, grupoConFactor, fechaLegible } from './textos'
 import { CoberturaNecesidad } from './CoberturaNecesidad'
 import { ConvocatoriaNecesidad } from './ConvocatoriaNecesidad'
+import { ConvocatoriasNecesidad } from './ConvocatoriasNecesidad'
 
 // Una necesidad: qué se pide, cuánto falta (barra de progreso) y, si está abierta,
 // los botones para convocar donantes, corregir la cantidad o cerrarla a mano.
-export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, onPedirUnidades, pedir, ocupado }) {
+// TAREA-13: con qué se cubrió y qué pasa con sus convocatorias al cubrirse.
+export function TarjetaNecesidad({
+  necesidad, onCorregir, onCerrar, onConvocar, onPedirUnidades, onMantenerAbierta, onDecidirTurnos, pedir, ocupado,
+}) {
   const [editando, setEditando] = useState(false)
   const [cantidad, setCantidad] = useState(necesidad.unidadesSolicitadas)
   const [confirmandoCierre, setConfirmandoCierre] = useState(false)
@@ -50,6 +54,17 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
           {enCamino > 0 && <> · <strong className="texto-en-camino">{enCamino}</strong> en camino</>}
         </span>
       </div>
+      {/* TAREA-13, criterio: la necesidad cerrada queda en el historial indicando cómo se cubrió */}
+      {necesidad.cubiertaCon && <p className="necesidad-cubierta-con">✓ {CUBIERTA_CON[necesidad.cubiertaCon]}</p>}
+
+      {!pasoConvocatoria && (
+        <ConvocatoriasNecesidad
+          necesidad={necesidad}
+          onMantenerAbierta={onMantenerAbierta}
+          onDecidirTurnos={onDecidirTurnos}
+          ocupado={ocupado}
+        />
+      )}
 
       {estaAbierta && !editando && !confirmandoCierre && !pasoConvocatoria && (
         <div className="necesidad-acciones">

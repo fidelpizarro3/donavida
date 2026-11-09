@@ -7,6 +7,7 @@ const { autenticar, autorizar } = require('../middlewares/auth');
 const { datosInvalidos, esFechaValida, obtenerFechaHoy } = require('../utils/validaciones');
 const { formatearFecha, formatearHora, parsearFecha } = require('../utils/formateadores');
 const { obtenerHabilitacion } = require('../services/habilitacion');
+const { recibeDonantes } = require('../services/cierreNecesidad');
 
 const router = Router();
 
@@ -130,7 +131,8 @@ router.post('/', autenticar, autorizar('donante'), async (req, res) => {
     return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: 'Primero tenés que aceptar la alerta' } });
   }
   const necesidad = alerta.convocatoria.necesidad;
-  if (necesidad.estado !== 'abierta') {
+  // TAREA-13: también si ya se cubrió pero el hospital mantuvo la convocatoria abierta para reponer stock
+  if (!recibeDonantes(alerta.convocatoria, necesidad)) {
     return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: 'Esa necesidad ya se cubrió o se cerró: no hace falta que vayas' } });
   }
 
@@ -261,8 +263,9 @@ router.patch('/:idTurno', autenticar, autorizar('donante'), async (req, res) => 
   if (nueva.idInstitucion !== turno.franjaHoraria.idInstitucion) {
     return datosInvalidos(res, 'Elegí un horario del mismo hospital');
   }
-  const { necesidad } = turno.alerta.convocatoria;
-  if (nueva.fecha > necesidad.fechaLimite) {
+  const { necesidad, decisionTurnos } = turno.alerta.convocatoria;
+  // TAREA-13: si la necesidad se cubrió y el hospital le pidió reprogramar, puede elegir cualquier día
+  if (decisionTurnos !== 'reprogramar' && nueva.fecha > necesidad.fechaLimite) {
     return datosInvalidos(res, `La necesidad es hasta el ${formatearFecha(necesidad.fechaLimite)}: elegí una franja anterior`);
   }
 

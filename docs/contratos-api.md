@@ -83,7 +83,9 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | `institucion.estado` | `pendiente`, `aprobada`, `rechazada`, `baja` |
 | `urgencia` | `urgente` (aviso al celular), `normal` (aviso por correo) |
 | `necesidad.estado` | `abierta`, `cubierta`, `cerrada_manual`, `vencida` |
+| `necesidad.cubiertaCon` (TAREA-13) | `donantes`, `transferencia`, `ambas` (null si no está cubierta) |
 | `convocatoria.estado` | `propuesta`, `enviada`, `cerrada` |
+| `convocatoria.decisionTurnos` (TAREA-13) | `mantener`, `reprogramar` (null hasta que el hospital decide) |
 | `alerta.canal` | `push`, `email`, `whatsapp` |
 | `alerta.estado` | `pendiente`, `enviada`, `aceptada`, `rechazada`, `cancelada` |
 | `turno.estado` | `reservado`, `cancelado`, `asistio`, `ausente` |
@@ -111,7 +113,7 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | A | B | `GET /api/donaciones?idDonante=` | Historial y cantidad de donaciones para el carné (18) |
 | A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
-| C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (versión mínima: TAREA-13 agrega el aviso de cierre) |
+| C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (con el cierre de la convocatoria y el agradecimiento de TAREA-13) |
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
 | B | C | `GET /api/necesidades/:idNecesidad/cobertura` | Buscar unidades en la red antes de convocar (TAREA-14) ✅ implementado |
 | B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) ✅ implementado (TAREA-12) |
@@ -462,13 +464,28 @@ El hospital marca a una persona como no apta por un motivo médico.
       "estado": "abierta",
       "creadaEn": "2026-10-05T09:12:00.000Z",
       "cerradaEn": null,
-      "unidadesEnCamino": 1
+      "cubiertaCon": null,
+      "unidadesEnCamino": 1,
+      "convocatorias": [
+        {
+          "idConvocatoria": "<uuid>",
+          "estado": "enviada",
+          "mantenerAbierta": false,
+          "decisionTurnos": null,
+          "creadaEn": "2026-10-05T10:00:00.000Z",
+          "turnosReservados": 2,
+          "agradecidos": 0
+        }
+      ]
     }
   ]
   ```
   `unidadesFaltantes` es calculado (`unidadesSolicitadas - unidadesCubiertas`).
   `unidadesEnCamino` (TAREA-14): unidades pedidas a otros hospitales en transferencias en curso. Todavía no suman en
   `unidadesCubiertas` (eso pasa al recibirlas), así que no se descuentan de `unidadesFaltantes`.
+  `cubiertaCon` (TAREA-13): `donantes`, `transferencia` o `ambas`; se guarda al cubrirse (null si no está cubierta).
+  `convocatorias` (TAREA-13): `turnosReservados` cuenta los turnos `reservado` de hoy en adelante; `agradecidos`, las
+  alertas que se cancelaron al cubrirse después de haberle llegado al donante.
 
 #### `POST /api/necesidades/:idNecesidad/convocatoria/propuesta` ✅ implementado
 
@@ -524,18 +541,49 @@ El hospital confirma la lista (con los cambios que haya hecho) y se guarda (TARE
 
 #### _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` ✅ implementado
 
-Reemplazan al `PATCH /api/necesidades/:idNecesidad/cobertura` que estaba acordado: la recepción de una
-transferencia (TAREA-12) los llama dentro de su propia transacción, sin una llamada HTTP de la API a sí misma.
-Están en `api/src/services/cierreNecesidad.js`.
+Reemplazan al `PATCH /api/necesidades/:idNecesidad/cobertura` que estaba acordado: quien suma los llama dentro de su
+propia transacción, sin una llamada HTTP de la API a sí misma. Están en `api/src/services/cierreNecesidad.js`.
+Los usan la recepción de una transferencia (TAREA-12), el registro de la donación (DV-11) y la corrección de la
+cantidad pedida (`PATCH /api/necesidades/:id`, si queda igual a lo cubierto).
 
 - `sumarCobertura`: suma `unidades` a `unidadesCubiertas` solo si la necesidad sigue `abierta` (suma atómica), sin
   pasarse de `unidadesSolicitadas`, y llama a `cerrarSiCubierta`. Si ya no está abierta no suma nada (las unidades
   igual entran al stock). Devuelve la necesidad como quedó.
-- `cerrarSiCubierta`: si la necesidad sigue `abierta` y ya tiene todo lo que pidió, la pasa a `cubierta` y completa
-  `cerradaEn`, con un cambio condicional: aunque se llame dos veces, se cierra una sola. Devuelve `true` si la cerró.
+- `cerrarSiCubierta`: si la necesidad sigue `abierta` y ya tiene todo lo que pidió, la pasa a `cubierta`, completa
+  `cerradaEn` y `cubiertaCon` (TAREA-13), y cierra sus convocatorias `enviada` salvo las que tienen `mantenerAbierta`.
+  El cambio es condicional: aunque se llame dos veces, se cierra una sola. Devuelve `true` si la cerró.
 - `db` (opcional): la transacción de quien llama.
-- **Pendiente (TAREA-13):** el aviso de agradecimiento a los donantes, "mantener abierta" la convocatoria y que el
-  registro de la donación (DV-11) también use `cerrarSiCubierta`.
+
+#### Cierre de la necesidad y agradecimiento (TAREA-13, DV-14) ✅ implementado
+
+Cuando la necesidad se cubre, `cerrarSiCubierta` cierra la convocatoria y, **después de guardar**, quien la llamó
+llama a `enviarAgradecimientos(idNecesidad)` (también en `cierreNecesidad.js`):
+
+- **A quiénes:** las alertas de las convocatorias cerradas de una necesidad `cubierta` que estaban `enviada` (no
+  respondió) o `aceptada` sin turno (aceptó pero no llegó a reservar). Pasan a `cancelada` y se devuelven en una sola
+  operación (`updateManyAndReturn`): un donante no recibe el agradecimiento dos veces, aunque haya dos cierres a la vez.
+  Las `pendiente` (nunca salieron) se cancelan sin mandar nada.
+- **Por su canal:** `push` si ese fue su canal (si no llega, correo de respaldo si lo tiene activado); `email` por correo.
+- Los que tienen turno no lo reciben: con ellos decide el hospital (ver abajo). Cerrar a mano o por vencimiento no
+  agradece (el issue habla solo de "cubierta").
+
+`POST /api/convocatorias/:idConvocatoria/mantener-abierta`
+- **Rol:** `institucion` (aprobada, dueña de la necesidad). **Body:** `{ "mantener": true | false }`.
+- Con la necesidad `abierta`: queda marcado y, al cubrirse, esa convocatoria **no** se cierra (para reponer stock):
+  los donantes pueden seguir aceptando y reservando turno hasta la fecha límite.
+- Con la necesidad `cubierta` y la convocatoria todavía abierta: `false` la cierra en ese momento y se agradece.
+- **200:** `{ idConvocatoria, estado, mantenerAbierta, decisionTurnos, creadaEn, turnosReservados, agradecidos }`.
+- **Errores:** 400 `DATOS_INVALIDOS`, 404 `NO_ENCONTRADO`, 409 `CONFLICTO` (convocatoria ya cerrada, o necesidad
+  cerrada a mano o vencida).
+
+`PATCH /api/convocatorias/:idConvocatoria/turnos`
+- **Rol:** `institucion`. **Body:** `{ "accion": "mantener" | "reprogramar" }`.
+- Una sola vez, con la necesidad `cubierta`, la convocatoria cerrada y al menos un turno `reservado` de hoy en adelante.
+  - `mantener`: vienen el día que eligieron (su donación va al stock). No se manda nada.
+  - `reprogramar`: se les avisa por su canal para que elijan otro día. El turno sigue reservado hasta que lo cambien,
+    y `PATCH /api/turnos/:idTurno` deja elegir cualquier fecha (sin el límite de la necesidad).
+- **200:** la convocatoria (como arriba) con `decisionTurnos` y `avisados`.
+- **Errores:** 400, 404, 409 (necesidad no cubierta, convocatoria mantenida abierta, ya se decidió o nadie con turno).
 
 #### `GET /api/estadisticas/convocatorias`
 
@@ -563,6 +611,8 @@ correo si lo tiene activado); `email` por correo. Antes de mandar se revisa el t
 corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae el `estado` y el `canal` final de cada una.
 
 - `GET /api/alertas/mias` (rol `donante`): sus alertas `enviada`, `aceptada` o `rechazada`, la más nueva primero.
+  TAREA-13: también las `cancelada` que le habían llegado (`enviadaEn` no nulo): son las del agradecimiento.
+  Cada una trae además `convocatoriaAbierta` (si todavía puede reservar turno) y `decisionTurnos`.
   ```json
   [
     {
@@ -583,7 +633,8 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
 - `POST /api/alertas/:idAlerta/aceptar` y `POST /api/alertas/:idAlerta/rechazar` (rol `donante`): pasan a
   `aceptada` / `rechazada` y completan `respondidaEn`. Aceptar devuelve además `siguientePaso`; con
   `institucion.idInstitucion` el front lleva a reservar turno (TAREA-10).
-  **Errores:** 404 si no es suya o no se mandó; 409 si ya respondió o la necesidad ya no está `abierta`.
+  **Errores:** 404 si no es suya o no se mandó; 409 si ya respondió o la convocatoria ya no recibe donantes
+  (la necesidad no está `abierta` y no se mantuvo abierta, TAREA-13).
 - `GET /api/push/clave-publica` (público): `{ "clavePublica": "..." }`, o 503 si faltan las claves VAPID en `api/.env`.
 - `POST /api/push/suscripcion` (logueado): body = `suscripcion.toJSON()` del navegador
   (`{ "endpoint": "https://...", "keys": { "p256dh": "...", "auth": "..." } }`). Si ya existía, la reactiva. **201.**
@@ -599,6 +650,7 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
   lugar en una transacción (una franja llena no se puede reservar).
 - `PATCH /api/turnos/:idTurno` (donante): `{ idFranjaHoraria }`. Reprograma el **mismo** turno a otra franja del
   mismo hospital, antes de la fecha límite de la necesidad: ocupa la nueva, libera la vieja y reinicia el recordatorio.
+  Si el hospital pidió reprogramar al cubrirse la necesidad (TAREA-13), puede ser cualquier fecha.
 - `POST /api/turnos/:idTurno/cancelar` (donante): libera el lugar y la alerta pasa a `rechazada` (sin penalización).
 - `GET /api/turnos/proximo` (donante, o institución con `?idDonante=`): trae también `idAlerta`.
 - `GET /api/turnos?fecha=YYYY-MM-DD` (institución, por defecto hoy): los turnos del día con el `donante`
@@ -613,7 +665,8 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
   - `ausente`: turno `ausente`, sin donación ni penalización.
   - `rechazada` (control médico): se guarda la donación y el turno queda `asistio`; no genera unidad.
   - `realizada`: crea la donación, la unidad con `registrarIngresoUnidad()` (DV-5), suma 1 a `unidadesCubiertas` de la
-    necesidad (la cierra como `cubierta` si se completa) y arranca la espera con `registrarDonacion()` (DV-3), que
+    necesidad con `sumarCobertura()` (la cierra como `cubierta` si se completa y se agradece, TAREA-13) y arranca la
+    espera con `registrarDonacion()` (DV-3), que
     también completa el grupo si el donante no lo tenía (en ese caso `grupoSanguineo` y `factorRh` son obligatorios).
   - **201:** `{ idTurno, estadoTurno, donacion, unidad: { codigo, componente, fechaVencimiento }, aptoDesde }`.
 - `GET /api/donaciones/mias` (donante): `{ habilitado, aptoDesde, motivo, totalDonaciones, donaciones: [{ fecha,

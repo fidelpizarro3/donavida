@@ -139,6 +139,12 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `POST /api/transferencias/:id/recibir` | La que pidió confirma la recepción: las unidades pasan a su stock y, si era para una necesidad, se suman a lo cubierto |
 | `GET /api/transferencias` | Historial de la institución, enviadas y recibidas (`?direccion=enviadas\|recibidas`). Las que no se respondieron a tiempo pasan solas a expirada |
 | `GET /api/transferencias/unidades-disponibles` | Para pedir a mano: unidades de un grupo y componente en otras instituciones (`?grupoSanguineo=&factorRh=&componente=`) |
+| `POST /api/convocatorias/:id/mantener-abierta` | Body: `{ mantener: true\|false }`. Deja la convocatoria abierta aunque la necesidad se cubra (para reponer stock). Si la necesidad ya está cubierta, `false` la cierra y se agradece a los que no fueron |
+| `PATCH /api/convocatorias/:id/turnos` | Con la necesidad cubierta, qué pasa con los que tenían turno: `{ accion: "mantener" \| "reprogramar" }`. Reprogramar les avisa por su canal y les deja elegir cualquier día |
+
+Cuando una necesidad se cubre (por una donación, una transferencia o al corregir la cantidad), se cierra sola su
+convocatoria y a los donantes que todavía no habían ido les llega un agradecimiento por su canal, una sola vez.
+La necesidad guarda con qué se cubrió (`cubiertaCon`: donantes, transferencia o las dos).
 
 Al registrarse llega un correo con el enlace de activación (en desarrollo, en Mailpit: http://localhost:8025).
 El enlace abre el front con `?token=...` y la cuenta se activa desde ahí.

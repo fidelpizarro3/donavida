@@ -13,6 +13,7 @@ jest.mock('../src/lib/prisma', () => ({
   transferencia: { create: jest.fn() },
   franjaHoraria: { count: jest.fn(), findMany: jest.fn() },
   donante: { findMany: jest.fn() },
+  convocatoria: { findMany: jest.fn() }, // la lista de necesidades trae sus convocatorias (TAREA-13)
 }));
 
 // La transferencia en sí (TAREA-12) se prueba en transferencias.test.js: acá solo se ve que se pida bien
@@ -108,6 +109,7 @@ beforeEach(() => {
   prisma.franjaHoraria.count.mockResolvedValue(0);
   prisma.franjaHoraria.findMany.mockResolvedValue([]);
   prisma.donante.findMany.mockResolvedValue([]);
+  prisma.convocatoria.findMany.mockResolvedValue([]);
   pedirTransferencia.mockImplementation(async (datos) => ({ idTransferencia: `T-${datos.idInstitucionProveedora}`, estado: 'pendiente' }));
 });
 

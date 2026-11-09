@@ -13,9 +13,12 @@ jest.mock('../src/lib/prisma', () => ({
     update: jest.fn(), updateMany: jest.fn(), fields: { cupoTotal: 'cupoTotal' },
   },
   turno: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  alerta: { findUnique: jest.fn(), update: jest.fn() },
-  donacion: { create: jest.fn(), findMany: jest.fn() },
-  necesidad: { findUnique: jest.fn(), update: jest.fn() },
+  alerta: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(), updateManyAndReturn: jest.fn(), findMany: jest.fn() },
+  donacion: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+  necesidad: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  // TAREA-13: al cubrirse la necesidad se cierra la convocatoria y se guarda con qué se cubrió
+  convocatoria: { updateMany: jest.fn() },
+  transferencia: { count: jest.fn() },
   $transaction: jest.fn(),
 }));
 // Las funciones de otras tareas se simulan: acá se prueba que se llamen bien
@@ -220,6 +223,13 @@ describe('DV-11: registro de la donación', () => {
     prisma.turno.findFirst.mockResolvedValue(turno({ franjaHoraria: { ...FRANJA, fecha: HOY } }));
     registrarIngresoUnidad.mockResolvedValue({ unidad: { codigo: 'U-ABC', componente: 'globulos_rojos', fechaVencimiento: enDias(42) } });
     registrarDonacion.mockResolvedValue({ aptoDesde: '2099-03-01' });
+    // TAREA-13: la suma y el cierre van por sumarCobertura (services/cierreNecesidad.js)
+    prisma.necesidad.updateMany.mockResolvedValue({ count: 1 });
+    prisma.donacion.count.mockResolvedValue(1);
+    prisma.transferencia.count.mockResolvedValue(0);
+    prisma.convocatoria.updateMany.mockResolvedValue({ count: 1 });
+    prisma.alerta.updateMany.mockResolvedValue({ count: 0 });
+    prisma.alerta.updateManyAndReturn.mockResolvedValue([]);
   });
 
   test('si donó: crea la donación, la unidad (DV-5), suma a la necesidad y arranca la espera (DV-3)', async () => {
@@ -232,15 +242,34 @@ describe('DV-11: registro de la donación', () => {
       expect.objectContaining({ idDonacion: 'don-1', grupoSanguineo: 'O', factorRh: 'negativo', componente: 'globulos_rojos' }),
       prisma
     );
-    expect(prisma.necesidad.update.mock.calls[0][0].data).toEqual({ unidadesCubiertas: 2 });
+    // Suma 1 a lo cubierto de la necesidad, solo si sigue abierta (TAREA-13: misma función que las transferencias)
+    expect(prisma.necesidad.updateMany).toHaveBeenCalledWith({
+      where: { idNecesidad: ID_NECESIDAD, estado: 'abierta' },
+      data: { unidadesCubiertas: { increment: 1 } },
+    });
+    expect(prisma.necesidad.updateMany).toHaveBeenCalledTimes(1); // todavía falta: no se cierra
     expect(registrarDonacion).toHaveBeenCalledWith(ID_DONANTE, expect.objectContaining({ grupoSanguineo: 'O', factorRh: 'negativo' }));
     expect(res.body).toMatchObject({ unidad: { codigo: 'U-ABC' }, aptoDesde: '2099-03-01' });
   });
 
-  test('con la última unidad que faltaba, la necesidad queda cubierta', async () => {
-    prisma.necesidad.findUnique.mockResolvedValue({ ...NECESIDAD, unidadesCubiertas: 2 });
-    await registrar({ resultado: 'realizada' });
-    expect(prisma.necesidad.update.mock.calls[0][0].data).toMatchObject({ unidadesCubiertas: 3, estado: 'cubierta' });
+  test('con la última unidad que faltaba, la necesidad queda cubierta y se agradece a los que no fueron (TAREA-13)', async () => {
+    const completa = { ...NECESIDAD, unidadesCubiertas: 3 };
+    prisma.necesidad.findUnique
+      .mockResolvedValueOnce(completa) // después de sumar
+      .mockResolvedValueOnce(completa) // cerrarSiCubierta
+      .mockResolvedValue({ ...completa, estado: 'cubierta' }); // cómo quedó
+    const res = await registrar({ resultado: 'realizada' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.necesidad.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { idNecesidad: ID_NECESIDAD, estado: 'abierta' },
+      data: { estado: 'cubierta', cerradaEn: expect.any(Date), cubiertaCon: 'donantes' },
+    });
+    expect(prisma.convocatoria.updateMany).toHaveBeenCalledWith({
+      where: { idNecesidad: ID_NECESIDAD, estado: 'enviada', mantenerAbierta: false },
+      data: { estado: 'cerrada' },
+    });
+    expect(prisma.alerta.updateManyAndReturn).toHaveBeenCalled(); // el agradecimiento, después de guardar
   });
 
   test('si no sabía su grupo, hay que confirmarlo y se completa', async () => {

@@ -21,9 +21,14 @@ jest.mock('../src/lib/prisma', () => ({
     findMany: jest.fn(),
     updateMany: jest.fn(),
     updateManyAndReturn: jest.fn(),
+    count: jest.fn(),
   },
   transferenciaItem: { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
   movimientoUnidad: { create: jest.fn(), createMany: jest.fn() },
+  // TAREA-13: al cubrirse la necesidad se cierra su convocatoria y se agradece a los donantes
+  donacion: { count: jest.fn() },
+  convocatoria: { updateMany: jest.fn() },
+  alerta: { updateMany: jest.fn(), updateManyAndReturn: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
 }));
 
@@ -120,6 +125,11 @@ beforeEach(() => {
   prisma.transferenciaItem.createMany.mockResolvedValue({ count: 2 });
   prisma.transferenciaItem.updateMany.mockResolvedValue({ count: 2 });
   prisma.movimientoUnidad.createMany.mockResolvedValue({ count: 2 });
+  prisma.donacion.count.mockResolvedValue(0);
+  prisma.transferencia.count.mockResolvedValue(1);
+  prisma.convocatoria.updateMany.mockResolvedValue({ count: 0 });
+  prisma.alerta.updateMany.mockResolvedValue({ count: 0 });
+  prisma.alerta.updateManyAndReturn.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -631,7 +641,8 @@ describe('Criterio 8: ligada a una necesidad, al recibir suma lo cubierto y la c
       });
       expect(prisma.necesidad.updateMany).toHaveBeenNthCalledWith(2, {
         where: { idNecesidad: NEC, estado: 'abierta' },
-        data: { estado: 'cubierta', cerradaEn: expect.any(Date) },
+        // TAREA-13: queda guardado con qué se cubrió (acá, solo con la transferencia)
+        data: { estado: 'cubierta', cerradaEn: expect.any(Date), cubiertaCon: 'transferencia' },
       });
     });
 

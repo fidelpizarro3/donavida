@@ -11,6 +11,7 @@ const { datosInvalidos, obtenerFechaHoy, GRUPOS_VALIDOS, FACTORES_VALIDOS } = re
 const { formatearFecha } = require('../utils/formateadores');
 const { registrarIngresoUnidad } = require('../services/unidades');
 const { registrarDonacion, obtenerHabilitacion } = require('../services/habilitacion');
+const { sumarCobertura, enviarAgradecimientos } = require('../services/cierreNecesidad');
 
 const router = Router();
 
@@ -127,17 +128,10 @@ router.post('/', autenticar, autorizar('institucion'), async (req, res) => {
       if (error) throw new ErrorDonacion(400, 'DATOS_INVALIDOS', error);
 
       // La unidad cubre una de las que pidió la necesidad que originó la convocatoria (DV-4).
-      // Si con esta se completa, la necesidad queda cubierta
-      const necesidad = await tx.necesidad.findUnique({ where: { idNecesidad: turno.alerta.convocatoria.idNecesidad } });
-      if (necesidad.estado === 'abierta') {
-        const cubiertas = necesidad.unidadesCubiertas + 1;
-        const completa = cubiertas >= necesidad.unidadesSolicitadas;
-        await tx.necesidad.update({
-          where: { idNecesidad: necesidad.idNecesidad },
-          data: { unidadesCubiertas: cubiertas, ...(completa && { estado: 'cubierta', cerradaEn: new Date() }) },
-        });
-      }
-      return { donacion, unidad };
+      // TAREA-13: suma con la misma función que las transferencias (DV-13). Si con esta se completa,
+      // la necesidad queda cubierta y se cierra su convocatoria (DV-14)
+      const necesidad = await sumarCobertura(turno.alerta.convocatoria.idNecesidad, 1, tx);
+      return { donacion, unidad, necesidad };
     });
   } catch (err) {
     if (err instanceof ErrorDonacion) return responderError(res, err.status, err.codigo, err.message);
@@ -149,6 +143,11 @@ router.post('/', autenticar, autorizar('institucion'), async (req, res) => {
   let habilitacion = null;
   if (datos.resultado === 'realizada') {
     habilitacion = await registrarDonacion(turno.idDonante, { fecha, grupoSanguineo, factorRh });
+  }
+
+  // TAREA-13: si la necesidad quedó cubierta, se les agradece a los que todavía no habían ido (después de guardar)
+  if (resultado.necesidad?.estado === 'cubierta') {
+    await enviarAgradecimientos(resultado.necesidad.idNecesidad);
   }
 
   const { donacion, unidad } = resultado;
