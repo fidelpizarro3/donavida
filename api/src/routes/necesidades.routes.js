@@ -12,6 +12,7 @@ const {
     datosInvalidos,
 } = require('../utils/validaciones');
 const { formatearFecha, parsearFecha } = require('../utils/formateadores');
+const { enCaminoPorNecesidad } = require('../services/cobertura');
 
 const router = Router();
 
@@ -150,7 +151,9 @@ router.get('/', autorizar('institucion', 'admin'), async (req, res) => {
 
     await cerrarVencidas();
     const necesidades = await prisma.necesidad.findMany({ where: filtro, orderBy: { fechaLimite: 'asc' } });
-    res.json(necesidades.map(mapearNecesidad));
+    // TAREA-14: lo pedido a otros hospitales todavía no está cubierto (suma al recibirlo), pero se muestra aparte
+    const enCamino = await enCaminoPorNecesidad(necesidades.map((n) => n.idNecesidad));
+    res.json(necesidades.map((n) => ({ ...mapearNecesidad(n), unidadesEnCamino: enCamino.get(n.idNecesidad) ?? 0 })));
 });
 
 // 3) PATCH /api/necesidades/:idNecesidad: corregir la cantidad pedida

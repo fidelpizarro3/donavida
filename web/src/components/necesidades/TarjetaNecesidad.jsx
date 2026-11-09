@@ -16,6 +16,9 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
   const estaAbierta = necesidad.estado === 'abierta'
   // Criterio: siempre se ve cuántas están comprometidas y cuántas faltan
   const porcentaje = Math.round((necesidad.unidadesCubiertas / necesidad.unidadesSolicitadas) * 100)
+  // TAREA-14: unidades pedidas a otros hospitales que todavía no llegaron (no cuentan como comprometidas)
+  const enCamino = necesidad.unidadesEnCamino ?? 0
+  const porcentajeEnCamino = Math.min(100 - porcentaje, Math.round((enCamino / necesidad.unidadesSolicitadas) * 100))
 
   const handleGuardar = async () => {
     const guardada = await onCorregir(necesidad.idNecesidad, Number(cantidad))
@@ -36,12 +39,16 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         </div>
       </div>
 
-      <div className="progreso">
+      <div className="progreso progreso-doble">
         <div className="progreso-barra" style={{ width: `${porcentaje}%` }} />
+        {enCamino > 0 && <div className="progreso-en-camino" style={{ width: `${porcentajeEnCamino}%` }} />}
       </div>
       <div className="necesidad-pie">
         <span><strong>{necesidad.unidadesCubiertas}</strong> de {necesidad.unidadesSolicitadas} unidades comprometidas</span>
-        <span>Faltan <strong>{necesidad.unidadesFaltantes}</strong></span>
+        <span>
+          Faltan <strong>{necesidad.unidadesFaltantes}</strong>
+          {enCamino > 0 && <> · <strong className="texto-en-camino">{enCamino}</strong> en camino</>}
+        </span>
       </div>
 
       {estaAbierta && !editando && !confirmandoCierre && !pasoConvocatoria && (

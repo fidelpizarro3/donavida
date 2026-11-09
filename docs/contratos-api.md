@@ -461,11 +461,14 @@ El hospital marca a una persona como no apta por un motivo médico.
       "fechaLimite": "2026-10-06",
       "estado": "abierta",
       "creadaEn": "2026-10-05T09:12:00.000Z",
-      "cerradaEn": null
+      "cerradaEn": null,
+      "unidadesEnCamino": 1
     }
   ]
   ```
   `unidadesFaltantes` es calculado (`unidadesSolicitadas - unidadesCubiertas`).
+  `unidadesEnCamino` (TAREA-14): unidades pedidas a otros hospitales en transferencias en curso. Todavía no suman en
+  `unidadesCubiertas` (eso pasa al recibirlas), así que no se descuentan de `unidadesFaltantes`.
 
 #### `POST /api/necesidades/:idNecesidad/convocatoria/propuesta` ✅ implementado
 

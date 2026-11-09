@@ -20,7 +20,21 @@ function unidadesEnCamino(idNecesidad) {
   return prisma.transferenciaItem.count({ where: { activo: true, transferencia: { idNecesidad } } });
 }
 
-const claveDeStock = ({ idInstitucion, grupoSanguineo, factorRh, componente }) =>
+// Lo mismo para varias necesidades de una vez (la lista del hospital). Devuelve un Map idNecesidad → unidades
+async function enCaminoPorNecesidad(idsNecesidad) {
+  const enCamino = new Map();
+  if (idsNecesidad.length === 0) return enCamino;
+  const items = await prisma.transferenciaItem.findMany({
+    where: { activo: true, transferencia: { idNecesidad: { in: idsNecesidad } } },
+    select: { transferencia: { select: { idNecesidad: true } } },
+  });
+  for (const { transferencia } of items) {
+    enCamino.set(transferencia.idNecesidad, (enCamino.get(transferencia.idNecesidad) ?? 0) + 1);
+  }
+  return enCamino;
+}
+
+const claveDeStock =({ idInstitucion, grupoSanguineo, factorRh, componente }) =>
   `${idInstitucion}|${grupoSanguineo}|${factorRh}|${componente}`;
 
 // Devuelve las unidades que se pueden prestar sin que la institución baje de su stock mínimo.
@@ -125,4 +139,4 @@ async function buscarCoberturaEnRed(necesidad) {
   return { ...resumen, cubiertasEnRed: unidadesFaltantes - porCubrir, faltanConvocar: porCubrir, opciones };
 }
 
-module.exports = { buscarCoberturaEnRed, unidadesEnCamino };
+module.exports = { buscarCoberturaEnRed, unidadesEnCamino, enCaminoPorNecesidad };

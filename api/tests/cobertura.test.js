@@ -6,10 +6,10 @@ const jwt = require('jsonwebtoken');
 // Base simulada: cada test decide qué devuelve cada consulta
 jest.mock('../src/lib/prisma', () => ({
   usuarioInstitucion: { findFirst: jest.fn() },
-  necesidad: { findFirst: jest.fn(), updateMany: jest.fn() },
+  necesidad: { findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   unidadSangre: { findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   stockMinimo: { findMany: jest.fn() },
-  transferenciaItem: { count: jest.fn() },
+  transferenciaItem: { count: jest.fn(), findMany: jest.fn() },
   transferencia: { create: jest.fn() },
   franjaHoraria: { count: jest.fn(), findMany: jest.fn() },
   donante: { findMany: jest.fn() },
@@ -104,6 +104,7 @@ beforeEach(() => {
   prisma.unidadSangre.findMany.mockResolvedValue([]);
   prisma.stockMinimo.findMany.mockResolvedValue([]);
   prisma.transferenciaItem.count.mockResolvedValue(0);
+  prisma.transferenciaItem.findMany.mockResolvedValue([]);
   prisma.franjaHoraria.count.mockResolvedValue(0);
   prisma.franjaHoraria.findMany.mockResolvedValue([]);
   prisma.donante.findMany.mockResolvedValue([]);
@@ -379,5 +380,31 @@ describe('Criterio: si el hospital acepta, se crea la transferencia (TAREA-12)',
     expect(res.status).toBe(409);
     expect(res.body.error.mensaje).toBe('Se pidió 1 transferencia, pero otra no: La unidad U-9 ya está pedida en otra transferencia en curso');
     expect(res.body.transferencias).toEqual([{ idTransferencia: 'T-1', estado: 'pendiente' }]);
+  });
+});
+
+describe('La lista de necesidades muestra lo que viene en camino', () => {
+  const OTRA = { ...NECESIDAD, idNecesidad: '88888888-8888-4888-8888-888888888888' };
+  const listar = () => request(app).get('/api/necesidades').set('Authorization', `Bearer ${tokenDe('institucion')}`);
+
+  test('cuenta las unidades de transferencias en curso de cada necesidad, sin descontarlas de las faltantes', async () => {
+    prisma.necesidad.findMany.mockResolvedValue([NECESIDAD, OTRA]);
+    const item = { transferencia: { idNecesidad: ID_NECESIDAD } };
+    prisma.transferenciaItem.findMany.mockResolvedValue([item, item]);
+
+    const res = await listar();
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((n) => [n.unidadesFaltantes, n.unidadesEnCamino])).toEqual([[2, 2], [2, 0]]);
+    expect(prisma.transferenciaItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { activo: true, transferencia: { idNecesidad: { in: [ID_NECESIDAD, OTRA.idNecesidad] } } },
+    }));
+  });
+
+  test('sin necesidades no consulta transferencias', async () => {
+    prisma.necesidad.findMany.mockResolvedValue([]);
+    const res = await listar();
+    expect(res.body).toEqual([]);
+    expect(prisma.transferenciaItem.findMany).not.toHaveBeenCalled();
   });
 });

@@ -1088,6 +1088,24 @@ input[type='radio'] {
   color: var(--text-muted);
 }
 
+/* Barra de la tarjeta: lo comprometido y, a continuación, lo que viene de otros hospitales */
+.progreso-doble {
+  display: flex;
+}
+
+.progreso-doble .progreso-barra {
+  border-radius: 999px 0 0 999px;
+}
+
+.progreso-en-camino {
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #f2a5a5 0 6px, #f8c9c9 6px 12px);
+}
+
+.necesidad-pie .texto-en-camino {
+  color: var(--primary);
+}
+
 .cobertura-nota {
   margin: 0.5rem 0 0;
   font-size: 0.8rem;
