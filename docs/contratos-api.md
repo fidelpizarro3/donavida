@@ -113,7 +113,7 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
 | C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (versión mínima: TAREA-13 agrega el aviso de cierre) |
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
-| B | C | `GET /api/inventario/disponibilidad-red` | Buscar unidades en la red antes de convocar (12) |
+| B | C | `GET /api/necesidades/:idNecesidad/cobertura` | Buscar unidades en la red antes de convocar (TAREA-14) ✅ implementado |
 | B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) ✅ implementado (TAREA-12) |
 | B | C | _interno_ `registrarIngresoUnidad(datos, db)` | Cargar las unidades que genera una donación (5, 11) ✅ implementado |
 
@@ -461,11 +461,14 @@ El hospital marca a una persona como no apta por un motivo médico.
       "fechaLimite": "2026-10-06",
       "estado": "abierta",
       "creadaEn": "2026-10-05T09:12:00.000Z",
-      "cerradaEn": null
+      "cerradaEn": null,
+      "unidadesEnCamino": 1
     }
   ]
   ```
   `unidadesFaltantes` es calculado (`unidadesSolicitadas - unidadesCubiertas`).
+  `unidadesEnCamino` (TAREA-14): unidades pedidas a otros hospitales en transferencias en curso. Todavía no suman en
+  `unidadesCubiertas` (eso pasa al recibirlas), así que no se descuentan de `unidadesFaltantes`.
 
 #### `POST /api/necesidades/:idNecesidad/convocatoria/propuesta` ✅ implementado
 
@@ -479,6 +482,7 @@ Lista sugerida de donantes para una necesidad `abierta` (TAREA-8). **No guarda n
 - **Orden:** primero grupo exacto, después compatible; dentro de cada uno, el más cercano primero.
 - **Cupo:** suma de lugares libres de las `franja_horaria` abiertas de la institución hasta la `fechaLimite`.
   Si la institución todavía no tiene agenda (DV-10), se usan las unidades que faltan (`segun: "unidades_faltantes"`).
+  Con agenda, el cupo nunca pasa de lo que falta. Las unidades en transferencias en curso no se cuentan como faltantes (TAREA-14).
 - **200:**
   ```json
   {
@@ -618,25 +622,55 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
 
 ### Dominio C — Inventario y red
 
-#### `GET /api/inventario/disponibilidad-red`
+#### `GET /api/necesidades/:idNecesidad/cobertura` ✅ implementado
 
-- **Rol:** `institucion`.
-- **Query:** `grupoSanguineo`, `factorRh`, `componente`, `cantidad`, `idInstitucion` (la que pide).
-- **Qué resuelve C:** solo unidades `disponible` de instituciones `aprobada` (distintas de la que pide) que, después de
-  prestar, sigan por encima de su `stock_minimo`.
-- **200** (ordenado por distancia y por días que le quedan a cada unidad):
+Reemplaza a `GET /api/inventario/disponibilidad-red`: busca cobertura para una necesidad antes de convocar (TAREA-14).
+
+- **Rol:** `institucion`, dueña de la necesidad. La necesidad debe estar `abierta` y dentro de su fecha límite.
+- **Qué resuelve:** solo lee, no modifica nada. Toma unidades `disponible`, no vencidas, del mismo componente y de grupo
+  compatible, de instituciones `aprobada` distintas de la que pide, que no estén pedidas en otra transferencia en curso.
+  Cada institución presta lo que supera su
+  `stock_minimo` (por grupo, factor y componente; sin mínimo cargado puede prestar todo), empezando por lo que vence antes.
+- **200** (ordenado por distancia y por días restantes):
   ```json
-  [
-    {
-      "idInstitucion": "<uuid>",
-      "nombre": "Banco de Sangre Regional",
-      "distanciaKm": 6.1,
-      "unidades": [{ "idUnidadSangre": "<uuid>", "codigo": "U-000210", "fechaVencimiento": "2026-10-03", "diasRestantes": 5 }]
-    }
-  ]
+  {
+    "idNecesidad": "<uuid>",
+    "unidadesFaltantes": 3,
+    "enCamino": 1,
+    "cubiertasEnRed": 2,
+    "faltanConvocar": 1,
+    "opciones": [
+      {
+        "idInstitucion": "<uuid>",
+        "nombre": "Banco de Sangre Regional",
+        "distanciaKm": 6.1,
+        "sugeridas": 2,
+        "unidades": [
+          { "idUnidadSangre": "<uuid>", "codigo": "U-000210", "grupoSanguineo": "O", "factorRh": "negativo", "fechaVencimiento": "2026-10-03", "diasRestantes": 5 }
+        ]
+      }
+    ]
+  }
   ```
-  `nombre`, `distanciaKm` y `diasRestantes` son calculados.
-- **200 con `[]`** si no hay cobertura en la red: B convoca donantes por todo lo que falta.
+  `unidadesFaltantes` ya descuenta `enCamino` (unidades en transferencias con `transferencia_item.activo`). Las primeras
+  `sugeridas` unidades de cada opción son las que alcanzan para cubrir lo que falta. Sin cobertura, `opciones` es `[]`.
+- **Errores:** 404 `NO_ENCONTRADO`, 409 `CONFLICTO` si la necesidad no está `abierta` o pasó su fecha límite.
+
+#### `POST /api/necesidades/:idNecesidad/cobertura/aceptar` ✅ implementado
+
+El hospital acepta la propuesta, o una parte (TAREA-14).
+
+- **Rol:** `institucion`, dueña de la necesidad (abierta y en fecha).
+- **Body:** `{ "idsUnidadSangre": ["<uuid>", "..."] }` (de 1 a 50, sin repetir).
+- **Qué hace B:** vuelve a buscar la cobertura y revisa que cada unidad siga en las opciones (no se usó, no venció, no la
+  pidió otro hospital y el que presta no queda por debajo de su mínimo) y que no se pidan más de las que faltan.
+  Después crea una transferencia por cada hospital que presta con `pedirTransferencia` (TAREA-12), ligada a la
+  necesidad. Cada hospital responde la suya; lo que no se cubra se convoca después, porque el cupo descuenta lo que
+  viene en camino.
+- **201:** `{ "idNecesidad": "<uuid>", "unidadesPedidas": 3, "transferencias": [ <transferencia>, ... ] }` (forma de abajo).
+- **Errores:** 400 `DATOS_INVALIDOS`, 404 `NO_ENCONTRADO`, 409 `CONFLICTO` (necesidad no abierta o vencida, más unidades
+  de las que faltan, o alguna que ya no se puede pedir). Si una transferencia falla después de crear otras, responde el
+  error de la que falló y además `transferencias` con las que sí se pidieron.
 
 #### Transferencias entre instituciones ✅ implementado (TAREA-12)
 

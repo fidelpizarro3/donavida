@@ -87,6 +87,13 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
       `Convocatoria confirmada: ${datos.idsDonantes.length} ${datos.idsDonantes.length === 1 ? 'persona va a recibir' : 'personas van a recibir'} el aviso.`
     )
 
+  // TAREA-14: pedir a otros hospitales las unidades que propuso la búsqueda en la red
+  const pedirUnidades = (idNecesidad, idsUnidadSangre) =>
+    ejecutar(
+      () => pedir(`/${idNecesidad}/cobertura/aceptar`, { method: 'POST', body: JSON.stringify({ idsUnidadSangre }) }),
+      `Pedido enviado: ${idsUnidadSangre.length} ${idsUnidadSangre.length === 1 ? 'unidad' : 'unidades'}. Seguilo en la pestaña Transferencias.`
+    )
+
   return (
     <>
       <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
@@ -119,6 +126,7 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
               onCorregir={corregir}
               onCerrar={cerrar}
               onConvocar={convocar}
+              onPedirUnidades={pedirUnidades}
               pedir={pedir}
               ocupado={ocupado}
             />

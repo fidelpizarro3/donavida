@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { COMPONENTES, ESTADOS, grupoConFactor, fechaLegible } from './textos'
+import { CoberturaNecesidad } from './CoberturaNecesidad'
 import { ConvocatoriaNecesidad } from './ConvocatoriaNecesidad'
 
 // Una necesidad: qué se pide, cuánto falta (barra de progreso) y, si está abierta,
 // los botones para convocar donantes, corregir la cantidad o cerrarla a mano.
-export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, pedir, ocupado }) {
+export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, onPedirUnidades, pedir, ocupado }) {
   const [editando, setEditando] = useState(false)
   const [cantidad, setCantidad] = useState(necesidad.unidadesSolicitadas)
   const [confirmandoCierre, setConfirmandoCierre] = useState(false)
-  const [convocando, setConvocando] = useState(false)
+  // null = nada abierto. TAREA-14: primero 'red' (buscar en otros hospitales), después 'donantes'
+  const [pasoConvocatoria, setPasoConvocatoria] = useState(null)
 
   const estado = ESTADOS[necesidad.estado]
   const estaAbierta = necesidad.estado === 'abierta'
   // Criterio: siempre se ve cuántas están comprometidas y cuántas faltan
   const porcentaje = Math.round((necesidad.unidadesCubiertas / necesidad.unidadesSolicitadas) * 100)
+  // TAREA-14: unidades pedidas a otros hospitales que todavía no llegaron (no cuentan como comprometidas)
+  const enCamino = necesidad.unidadesEnCamino ?? 0
+  const porcentajeEnCamino = Math.min(100 - porcentaje, Math.round((enCamino / necesidad.unidadesSolicitadas) * 100))
 
   const handleGuardar = async () => {
     const guardada = await onCorregir(necesidad.idNecesidad, Number(cantidad))
@@ -34,17 +39,21 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         </div>
       </div>
 
-      <div className="progreso">
+      <div className="progreso progreso-doble">
         <div className="progreso-barra" style={{ width: `${porcentaje}%` }} />
+        {enCamino > 0 && <div className="progreso-en-camino" style={{ width: `${porcentajeEnCamino}%` }} />}
       </div>
       <div className="necesidad-pie">
         <span><strong>{necesidad.unidadesCubiertas}</strong> de {necesidad.unidadesSolicitadas} unidades comprometidas</span>
-        <span>Faltan <strong>{necesidad.unidadesFaltantes}</strong></span>
+        <span>
+          Faltan <strong>{necesidad.unidadesFaltantes}</strong>
+          {enCamino > 0 && <> · <strong className="texto-en-camino">{enCamino}</strong> en camino</>}
+        </span>
       </div>
 
-      {estaAbierta && !editando && !confirmandoCierre && !convocando && (
+      {estaAbierta && !editando && !confirmandoCierre && !pasoConvocatoria && (
         <div className="necesidad-acciones">
-          <button type="button" className="btn btn-primary btn-chico" onClick={() => setConvocando(true)} disabled={ocupado}>
+          <button type="button" className="btn btn-primary btn-chico" onClick={() => setPasoConvocatoria('red')} disabled={ocupado}>
             Convocar donantes
           </button>
           <button type="button" className="btn btn-secondary btn-chico" onClick={() => setEditando(true)} disabled={ocupado}>
@@ -56,12 +65,23 @@ export function TarjetaNecesidad({ necesidad, onCorregir, onCerrar, onConvocar, 
         </div>
       )}
 
-      {convocando && (
+      {pasoConvocatoria === 'red' && (
+        <CoberturaNecesidad
+          necesidad={necesidad}
+          pedir={pedir}
+          onPedir={(ids) => onPedirUnidades(necesidad.idNecesidad, ids)}
+          onConvocar={() => setPasoConvocatoria('donantes')}
+          onCancelar={() => setPasoConvocatoria(null)}
+          ocupado={ocupado}
+        />
+      )}
+
+      {pasoConvocatoria === 'donantes' && (
         <ConvocatoriaNecesidad
           necesidad={necesidad}
           pedir={pedir}
           onConfirmar={(datos) => onConvocar(necesidad.idNecesidad, datos)}
-          onCancelar={() => setConvocando(false)}
+          onCancelar={() => setPasoConvocatoria(null)}
           ocupado={ocupado}
         />
       )}

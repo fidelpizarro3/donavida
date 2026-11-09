@@ -181,3 +181,4 @@ router.post('/:idNecesidad/convocatoria', autenticar, autorizar('institucion'), 
 });
 
 module.exports = router;
+module.exports.buscarNecesidadPropia = buscarNecesidadPropia; // la usa cobertura.routes.js (TAREA-14)
