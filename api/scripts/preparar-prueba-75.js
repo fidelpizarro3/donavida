@@ -1,7 +1,10 @@
-// Prepara la base de desarrollo de DonaVida para probar a mano las funcionalidades del 75%
-// (12, 13, 14 y 15 del Excel). Se puede correr las veces que haga falta: primero borra lo que creó
-// la corrida anterior (los usuarios @prueba.test y todo lo que cuelga de ellos y de sus instituciones)
-// y después lo vuelve a crear. No toca nada más de la base.
+// Prepara una base APARTE (donavida_prueba75) para probar a mano las funcionalidades del 75% de DonaVida
+// (12, 13, 14 y 15 del Excel). Usa el mismo Postgres del docker-compose, pero no toca la base de desarrollo
+// de cada uno: así los datos propios no se mezclan con los de la prueba y los resultados son los de la guía.
+//   - Si la base de prueba no existe la crea, y le aplica las migraciones (prisma migrate deploy).
+//   - Se puede correr las veces que haga falta: borra lo que creó la corrida anterior (los usuarios
+//     @prueba.test y todo lo que cuelga de ellos y de sus instituciones) y lo vuelve a crear.
+// La API se levanta contra esta base con api/scripts/api-prueba-75.js.
 //
 // Uso, desde la raíz del repo: node api/scripts/preparar-prueba-75.js
 // (opcional: pasarle otra carpeta api/ como argumento)
@@ -9,7 +12,9 @@
 const path = require('path');
 const fs = require('fs');
 const { randomBytes } = require('crypto');
+const { spawnSync } = require('child_process');
 
+const BASE_PRUEBA = 'donavida_prueba75';
 const API = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 if (!fs.existsSync(path.join(API, 'src/lib/prisma.js')) || !fs.existsSync(path.join(API, 'node_modules'))) {
   console.error(`"${API}" no parece la carpeta api/ de DonaVida con las dependencias instaladas (npm install).`);
@@ -17,7 +22,7 @@ if (!fs.existsSync(path.join(API, 'src/lib/prisma.js')) || !fs.existsSync(path.j
 }
 require(path.join(API, 'node_modules/dotenv')).config({ path: path.join(API, '.env'), quiet: true });
 
-// Por seguridad, solo contra una base local
+// Por seguridad, solo contra un Postgres local
 let url;
 try {
   url = new URL(process.env.DATABASE_URL ?? '');
@@ -26,24 +31,56 @@ try {
   process.exit(1);
 }
 if (!['localhost', '127.0.0.1'].includes(url.hostname)) {
-  console.error(`Por seguridad solo corre contra una base local, y DATABASE_URL apunta a ${url.hostname}.`);
+  console.error(`Por seguridad solo corre contra un Postgres local, y DATABASE_URL apunta a ${url.hostname}.`);
   process.exit(1);
 }
-console.log(`Base: ${url.hostname}:${url.port}${url.pathname}`);
+// Mismo servidor y usuario que la base de desarrollo, otra base
+const conBase = (nombre) => { const u = new URL(url); u.pathname = `/${nombre}`; return u.toString(); };
+const URL_PRUEBA = conBase(BASE_PRUEBA);
 
-const bcrypt = require(path.join(API, 'node_modules/bcrypt'));
-const prisma = require(path.join(API, 'src/lib/prisma'));
-const { registrarIngresoUnidad, marcarVencidas, generarCodigo, calcularVencimiento } = require(path.join(API, 'src/services/unidades'));
-const { responderCuestionario } = require(path.join(API, 'src/services/habilitacion'));
-const { distanciaKm } = require(path.join(API, 'src/services/distancia'));
-const { buscarCoberturaEnRed } = require(path.join(API, 'src/services/cobertura'));
-const { armarCuadro } = require(path.join(API, 'src/services/stockDemanda'));
-const { obtenerFechaHoy } = require(path.join(API, 'src/utils/validaciones'));
+// Se cargan después de apuntar DATABASE_URL a la base de prueba (src/lib/prisma se conecta al cargarse)
+let bcrypt, prisma, registrarIngresoUnidad, marcarVencidas, generarCodigo, calcularVencimiento;
+let responderCuestionario, distanciaKm, buscarCoberturaEnRed, armarCuadro, HOY;
+
+async function prepararBase() {
+  // 1. Crear la base de prueba si no existe (conectándose a la base "postgres", que siempre está)
+  const { PrismaClient } = require(path.join(API, 'node_modules/@prisma/client'));
+  const servidor = new PrismaClient({ datasourceUrl: conBase('postgres') });
+  try {
+    const existe = await servidor.$queryRawUnsafe('SELECT 1 FROM pg_database WHERE datname = $1', BASE_PRUEBA);
+    if (existe.length === 0) {
+      await servidor.$executeRawUnsafe(`CREATE DATABASE "${BASE_PRUEBA}"`);
+      console.log(`Se creó la base ${BASE_PRUEBA}.`);
+    }
+  } finally {
+    await servidor.$disconnect();
+  }
+
+  // 2. Migraciones (no interactivo)
+  const migrar = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+    cwd: API, env: { ...process.env, DATABASE_URL: URL_PRUEBA }, encoding: 'utf8', shell: process.platform === 'win32',
+  });
+  if (migrar.status !== 0) {
+    console.error(`Fallaron las migraciones de ${BASE_PRUEBA}:\n${migrar.stdout}\n${migrar.stderr}`);
+    process.exit(1);
+  }
+  console.log(`Base de prueba: ${url.hostname}:${url.port}/${BASE_PRUEBA} (migraciones al día). La de desarrollo (${url.pathname.slice(1)}) no se toca.`);
+
+  // 3. Desde acá, todo contra la base de prueba
+  process.env.DATABASE_URL = URL_PRUEBA;
+  bcrypt = require(path.join(API, 'node_modules/bcrypt'));
+  prisma = require(path.join(API, 'src/lib/prisma'));
+  ({ registrarIngresoUnidad, marcarVencidas, generarCodigo, calcularVencimiento } = require(path.join(API, 'src/services/unidades')));
+  ({ responderCuestionario } = require(path.join(API, 'src/services/habilitacion')));
+  ({ distanciaKm } = require(path.join(API, 'src/services/distancia')));
+  ({ buscarCoberturaEnRed } = require(path.join(API, 'src/services/cobertura')));
+  ({ armarCuadro } = require(path.join(API, 'src/services/stockDemanda')));
+  HOY = require(path.join(API, 'src/utils/validaciones')).obtenerFechaHoy();
+}
 
 const DOMINIO = '@prueba.test';
 const CLAVE = 'Prueba2026';
 const DIA = 86400000;
-const HOY = obtenerFechaHoy();
 const fecha = (t) => new Date(`${t}T00:00:00.000Z`);
 const enDias = (d) => new Date(fecha(HOY).getTime() + d * DIA).toISOString().slice(0, 10);
 const legible = (t) => t.split('-').reverse().join('/');
@@ -217,6 +254,7 @@ async function comprobarTodo({ H, n1, n2 }) {
 }
 
 async function main() {
+  await prepararBase();
   const borrados = await borrarPruebaAnterior();
   if (borrados) console.log(`Se borraron ${borrados} usuarios de una preparación anterior (y todo lo suyo).`);
   hash = await bcrypt.hash(CLAVE, 10);
@@ -327,4 +365,4 @@ async function main() {
 
 main()
   .catch((err) => { console.error('FALLÓ:', err); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => prisma?.$disconnect());

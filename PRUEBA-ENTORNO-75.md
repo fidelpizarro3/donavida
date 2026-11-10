@@ -1,14 +1,20 @@
 # Probar en local las funcionalidades del 75%
 
-Esta rama (`prueba-entorno`) es `main` más tres archivos:
+Esta rama (`prueba-entorno`) es `main` más cuatro archivos:
 - esta guía;
-- el script de datos de prueba, en [`api/scripts/preparar-prueba-75.js`](api/scripts/preparar-prueba-75.js);
+- [`api/scripts/preparar-prueba-75.js`](api/scripts/preparar-prueba-75.js): arma una **base aparte**, `donavida_prueba75`, con los datos de prueba;
+- [`api/scripts/api-prueba-75.js`](api/scripts/api-prueba-75.js): levanta la API contra esa base;
 - la lista de funcionalidades, en [`docs/DonaVida_ListaFuncionalidades_CodigoRojo.xlsx`](docs/DonaVida_ListaFuncionalidades_CodigoRojo.xlsx).
+
+La prueba usa el mismo Postgres del `docker-compose`, pero **no toca tu base de desarrollo** (`donavida`). Así lo que ya tenés cargado no se mezcla con la prueba y los resultados son exactamente los de la guía.
 
 **Para la persona:**
 1. Bajá la rama: `git fetch origin` y después `git checkout prueba-entorno`.
 2. Abrí Claude Code en la raíz del repo y decile: **"Hacé lo que dice PRUEBA-ENTORNO-75.md"**.
-3. Al volver a `main`, estos tres archivos desaparecen de la carpeta: solo viven en esta rama.
+3. **Cuando termines:**
+   - Cerrá la API de prueba y levantá la de siempre (`npm run dev` en `api/`): vuelve a tu base, que quedó igual.
+   - Al volver a `main`, estos cuatro archivos desaparecen de la carpeta, porque solo viven en esta rama.
+   - Si querés borrar la base de prueba: `docker compose exec db dropdb -U donavida donavida_prueba75`.
 
 ---
 
@@ -29,35 +35,39 @@ Los criterios de aceptación de cada una están en el Excel de `docs/`.
 
 ### Reglas (respetalas siempre)
 
-- **El repo no se toca:** no modifiques archivos versionados, no hagas commit ni push y no cambies la configuración de git.
+- **El repo no se toca:** no modifiques archivos versionados, no hagas commit ni push y no cambies la configuración de git. Si `npm install` cambia algún `package-lock.json` (pasa con otra versión de npm), no lo commitees: avisame y se descarta con `git checkout -- <archivo>`.
 - **La rama:** si `git status` muestra cambios sin commitear o no estoy en la rama `prueba-entorno`, preguntame antes de cambiar de rama o hacer pull.
 - **Solo lo de DonaVida:** usá únicamente los contenedores de `docker-compose.yml` (proyecto `donavida`: `db` en el puerto 5433 y `mail`, que es Mailpit, en 1025/8025). Si alguno de los puertos 5433, 1025, 8025, 3000 o 5173 está ocupado por otra cosa, **preguntame** antes de cerrar o tocar nada.
 - **`api/.env`** tiene secretos: nunca muestres su contenido. Si no existe, crealo copiando `api/.env.example` y poné en `JWT_SECRET` un valor aleatorio largo, por ejemplo con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Está en `.gitignore`.
-- **Base local:** si el `DATABASE_URL` de `api/.env` no apunta a `localhost`, frená y preguntame.
-- **Migraciones:** usá `npx prisma migrate deploy`. Nunca `prisma migrate dev`, que pide confirmación interactiva.
-- **Datos de prueba:** el script solo crea y borra datos de usuarios `@prueba.test`, y todo lo que cuelga de ellos y de sus instituciones. No toca nada más de la base.
+- **Base local:** si el `DATABASE_URL` de `api/.env` no apunta a `localhost`, frená y preguntame. No cambies el `DATABASE_URL`.
+- **Mi base de desarrollo (`donavida`) no se toca:** ni migraciones, ni datos, ni borrarla. Todo lo de la prueba va a la base aparte, `donavida_prueba75`, que arma `preparar-prueba-75.js`. Ese script crea la base si no existe, le aplica las migraciones con `prisma migrate deploy` y carga los datos.
+- **Migraciones:** nunca uses `prisma migrate dev`, que pide confirmación interactiva.
+- **La API de la prueba** se levanta con `node api/scripts/api-prueba-75.js`, no con `npm run dev`. Usa todo mi `api/.env` y solo cambia el nombre de la base.
 
 ### Qué tenés que hacer
 
 1. **Revisar la rama.** Corré `git status` y confirmá que estás en `prueba-entorno`, sin cambios.
 2. **Docker.** Si no está andando, avisame que abra Docker Desktop o abrilo vos si podés. Después, desde la raíz del repo, corré `docker compose up -d` y comprobá que `db` y `mail` estén corriendo.
 3. **Configuración.** Confirmá que `api/.env` exista (ver las reglas) sin mostrar su contenido. Revisá también que el `DATABASE_URL` apunte a `localhost:5433/donavida`.
-4. **Dependencias.** Corré `npm install` en `api/` y en `web/`. El front ahora usa `recharts` para el gráfico de la funcionalidad 15.
-5. **Base de datos.** En `api/`, corré `npx prisma migrate deploy` y después `npx prisma generate`.
-6. **Datos de prueba.** Desde la raíz del repo, corré `node api/scripts/preparar-prueba-75.js`.
-   - **Revisar el resultado:** al final tiene que imprimir **8 líneas `OK`** y "Todo en orden para empezar a probar". Si alguna dice `FALLA`, mostrame la salida y no sigas.
+4. **Dependencias.** Si hay una API de DonaVida corriendo, cerrala antes: en Windows bloquea archivos de Prisma. Después corré `npm install` en `api/` y en `web/` (el front ahora usa `recharts` para el gráfico de la funcionalidad 15), y en `api/`, `npx prisma generate`.
+5. **Base y datos de prueba.** Desde la raíz del repo, corré `node api/scripts/preparar-prueba-75.js`.
+   - **Revisar el resultado:** tiene que decir "Base de prueba: …/donavida_prueba75 (migraciones al día)". Al final tiene que imprimir **8 líneas `OK`** y "Todo en orden para empezar a probar". Si alguna dice `FALLA`, mostrame la salida y no sigas.
    - **Las fechas:** guardá las que imprime (hoy, el turno de Bruno, las fechas límite y las franjas), porque las vas a usar en la guía.
-7. **Servidores.** Levantalos en segundo plano: `npm run dev` en `api/`, que queda en http://localhost:3000, y `npm run dev` en `web/`, que queda en http://localhost:5173. Si ya estaban corriendo desde antes del `npm install`, **reinicialos**, porque Vite se queda con el error "Failed to resolve import recharts". Comprobá:
-   - que el login ande: `POST http://localhost:3000/api/auth/login` con `{"email":"hospital@prueba.test","password":"Prueba2026"}` tiene que devolver un token;
-   - que http://localhost:5173 y Mailpit (http://localhost:8025) respondan.
-8. **La guía.** Dame la guía de prueba de abajo, poniendo las fechas reales que imprimió el script donde dice "en 2 días", "en 12 días", etc.
+6. **Servidores, en segundo plano.**
+   - **La API de prueba:** desde la raíz del repo, `node api/scripts/api-prueba-75.js`. Queda en http://localhost:3000 y al arrancar dice "API de PRUEBA: base donavida_prueba75". Si el puerto 3000 está ocupado por mi API de siempre (`npm run dev`), cerrala; si es otra cosa, preguntame.
+   - **El front:** `npm run dev` en `web/`, que queda en http://localhost:5173. Si ya estaba corriendo desde antes del `npm install`, **reinicialo**, porque Vite se queda con el error "Failed to resolve import recharts".
+7. **Comprobaciones.**
+   - **El login:** `POST http://localhost:3000/api/auth/login` con `{"email":"admin@prueba.test","password":"Prueba2026"}` tiene que devolver un token. Si da 401, la API que está en el 3000 es la de siempre y no la de prueba.
+   - **El front y Mailpit:** http://localhost:5173 y http://localhost:8025 tienen que responder.
+8. **La guía.** Dame **completa, sin resumirla,** la guía de prueba de abajo. Poné las fechas reales que imprimió el script donde dice "en 2 días", "en 12 días", etc.
 
 ### Si algo falla
 
 - **"Failed to resolve import recharts":** Vite arrancó antes del `npm install`. Cerrá **todos** los procesos de Vite de DonaVida (detener la tarea a veces deja vivo el proceso hijo y el 5173 queda ocupado) y levantalo con `npm run dev -- --force`.
+- **`EPERM` en `npx prisma generate`:** hay una API de DonaVida corriendo que bloquea el archivo. Cerrala y repetí.
 - **Docker no responde:** Docker Desktop está cerrado.
 - **El script dice que la carpeta no es `api/`:** falta el `npm install` en `api/`.
-- **La API se reinicia sola:** puede pasar si el repo está en OneDrive, porque `node --watch` se dispara con la sincronización. No hace daño; recargar la página alcanza.
+- **Fallan las migraciones de la base de prueba:** mostrame el error. No toques la base `donavida`.
 
 ---
 
@@ -164,11 +174,19 @@ La clave de todos los usuarios es `Prueba2026`.
 
 ### Volver a empezar
 
-Desde la raíz del repo, corré `node api/scripts/preparar-prueba-75.js`. Borra y recrea solo los datos `@prueba.test`. Después volvé a entrar en cada sesión.
+Desde la raíz del repo, corré `node api/scripts/preparar-prueba-75.js`. Borra y recrea los datos de prueba en la base `donavida_prueba75`; la API de prueba puede seguir corriendo. Después volvé a entrar en cada sesión.
 
 Conviene correrlo el mismo día de la prueba, porque las fechas, los vencimientos y el consumo de 30 días se calculan desde hoy.
 
 ### Si algo no responde
 
-- **Los servidores** corren en segundo plano dentro de la sesión de Claude: si la cerrás, se apagan. Para levantarlos a mano, abrí dos terminales y corré `npm run dev` en `api/` y en `web/`.
+- **Los servidores** corren en segundo plano dentro de la sesión de Claude: si la cerrás, se apagan. Para levantarlos a mano, abrí dos terminales:
+  - en la raíz del repo, `node api/scripts/api-prueba-75.js`;
+  - en `web/`, `npm run dev`.
+- **Si al entrar dice que el usuario o la clave no son válidos**, la API que está corriendo es la de siempre (`npm run dev`) y no la de prueba.
 - **Si ves un error de conexión momentáneo**, recargá la página.
+
+### Cuando termines
+
+- **Tu API de siempre:** cerrá la de prueba y levantá la de siempre con `npm run dev` en `api/`. Vuelve a tu base `donavida`, que quedó igual.
+- **La base de prueba:** si la querés borrar, corré `docker compose exec db dropdb -U donavida donavida_prueba75`.
