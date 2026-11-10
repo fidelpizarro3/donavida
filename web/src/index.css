@@ -2280,3 +2280,133 @@ input[type='radio'] {
   color: var(--text-muted);
   font-size: 0.8rem;
 }
+
+/* ─── TAREA-15: stock contra demanda ─────────────────────────────────────── */
+
+/* No existía: la usaban las instituciones rechazadas y ahora el semáforo en rojo */
+.badge-danger {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.pestanas-chicas {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.grafico-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+}
+
+.grafico-detalle small {
+  color: var(--text-muted);
+}
+
+.grafico-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.25rem 0 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.grafico-leyenda i {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.3rem;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+/* 8 grupos: 4 por fila (2 en el celular) */
+.grupos-grilla {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 560px) {
+  .grupos-grilla {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.grupo-ficha {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid;
+  border-radius: var(--radius);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.grupo-ficha:hover,
+.grupo-ficha.elegido {
+  background: var(--bg-alt);
+}
+
+.grupo-ficha small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.grupo-ficha-nombre {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.grupo-detalle {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.grupo-detalle h4,
+.proponer-transferencia h4 {
+  margin: 0 0 0.5rem;
+}
+
+.grupo-numeros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.proponer-transferencia {
+  margin-top: 1rem;
+}
+
+.oferta-red {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+/* .texto-suave limita el ancho a 28rem: dentro del cuadro se lee mejor a lo ancho */
+.texto-ancho {
+  max-width: none;
+  margin-bottom: 0.75rem;
+}

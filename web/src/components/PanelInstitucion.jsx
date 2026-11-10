@@ -4,6 +4,7 @@ import { DatosInstitucion } from './instituciones/DatosInstitucion'
 import { StockInstitucion } from './stock/StockInstitucion'
 import { AgendaInstitucion } from './agenda/AgendaInstitucion'
 import { TurnosDelDia } from './agenda/TurnosDelDia'
+import { StockDemanda } from './panel/StockDemanda'
 import { TransferenciasInstitucion } from './transferencias/TransferenciasInstitucion'
 
 // Panel del usuario de una institución (hospital o banco de sangre), organizado en pestañas.
@@ -11,12 +12,14 @@ import { TransferenciasInstitucion } from './transferencias/TransferenciasInstit
 //   - TAREA-4 y 8: necesidades de sangre y convocatoria de donantes
 //   - TAREA-10 y DV-11: agenda de atención y registro de las donaciones
 //   - TAREA-6 y 7: stock de unidades
+//   - TAREA-15: stock contra demanda
 //   - TAREA-12: transferencias de unidades entre instituciones
 //   - TAREA-1: datos y estado de la institución
 const PESTANAS = [
   { id: 'necesidades', texto: 'Necesidades', icono: '🩸' },
   { id: 'agenda', texto: 'Agenda y turnos', icono: '🗓️' },
   { id: 'stock', texto: 'Stock', icono: '📦' },
+  { id: 'demanda', texto: 'Stock y demanda', icono: '📊' },
   { id: 'transferencias', texto: 'Transferencias', icono: '🔄' },
   { id: 'institucion', texto: 'Mi institución', icono: '🏥' },
 ]
@@ -77,6 +80,7 @@ export function PanelInstitucion({ usuario, token, apiUrl, onCerrarSesion }) {
         </>
       )}
       {pestana === 'stock' && <StockInstitucion token={token} apiUrl={apiUrl} />}
+      {pestana === 'demanda' && <StockDemanda token={token} apiUrl={apiUrl} />}
       {pestana === 'transferencias' && <TransferenciasInstitucion token={token} apiUrl={apiUrl} />}
       {pestana === 'institucion' && <DatosInstitucion token={token} apiUrl={apiUrl} />}
     </>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { TarjetaAdminInstitucion } from './TarjetaAdminInstitucion'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 import { Esqueleto } from '../comunes/Esqueleto'
+import { StockDemanda } from '../panel/StockDemanda'
 
 // Filtros del listado: cada uno se manda como ?estado= (vacío = todas)
 const FILTROS = [
@@ -141,6 +142,9 @@ export function PanelAdmin({ usuario, token, apiUrl, onCerrarSesion }) {
           </div>
         )}
       </section>
+
+      {/* TAREA-15: el mismo cuadro de stock contra demanda, sumando toda la red */}
+      <StockDemanda token={token} apiUrl={apiUrl} esAdmin />
     </>
   )
 }
