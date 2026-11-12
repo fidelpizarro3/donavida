@@ -7,6 +7,7 @@ import { Login } from './components/Login'
 import { PerfilDonante } from './components/PerfilDonante'
 import { PanelInstitucion } from './components/PanelInstitucion'
 import { RegistroInstitucion } from './components/instituciones/RegistroInstitucion'
+import { DatosInstitucion } from './components/instituciones/DatosInstitucion'
 import { PanelAdmin } from './components/admin/PanelAdmin'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -131,6 +132,16 @@ export default function App() {
 
         {token && usuario && (
           <div className="barra-usuario">
+            {/* Los datos de la institución van acá y no como pestaña: se consultan poco y así las pestañas entran sin scroll */}
+            {usuario.rol === 'institucion' && (
+              <button
+                type="button"
+                className={`nav-link ${vista === 'mi-institucion' ? 'activo' : ''}`}
+                onClick={() => irA(vista === 'mi-institucion' ? 'perfil' : 'mi-institucion')}
+              >
+                🏥 Mi institución
+              </button>
+            )}
             <span className="avatar" aria-hidden="true">{usuario.nombre?.[0]?.toUpperCase()}</span>
             <span className="barra-usuario-nombre">{usuario.nombre} {usuario.apellido}</span>
           </div>
@@ -142,7 +153,7 @@ export default function App() {
       )}
 
       {vista !== 'inicio' && (
-        <main className={`container ${vista === 'perfil' ? '' : 'container-angosto'}`}>
+        <main className={`container ${vista === 'perfil' || vista === 'mi-institucion' ? '' : 'container-angosto'}`}>
           {enAlta && <PasosAlta actual={{ registro: 0, 'registro-institucion': 0, verificar: 1, login: 2 }[vista]} />}
 
           {vista === 'registro' && (
@@ -189,6 +200,15 @@ export default function App() {
 
           {vista === 'perfil' && token && usuario?.rol === 'institucion' && (
             <PanelInstitucion usuario={usuario} token={token} apiUrl={API_URL} onCerrarSesion={handleCerrarSesion} />
+          )}
+
+          {vista === 'mi-institucion' && token && usuario?.rol === 'institucion' && (
+            <>
+              <button type="button" className="btn-link" onClick={() => irA('perfil')} style={{ marginBottom: '0.75rem' }}>
+                ← Volver al panel
+              </button>
+              <DatosInstitucion token={token} apiUrl={API_URL} />
+            </>
           )}
 
           {vista === 'perfil' && token && usuario?.rol === 'admin' && (

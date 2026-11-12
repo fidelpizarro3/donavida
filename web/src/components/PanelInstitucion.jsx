@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { NecesidadesInstitucion } from './necesidades/NecesidadesInstitucion'
-import { DatosInstitucion } from './instituciones/DatosInstitucion'
 import { StockInstitucion } from './stock/StockInstitucion'
 import { AgendaInstitucion } from './agenda/AgendaInstitucion'
 import { TurnosDelDia } from './agenda/TurnosDelDia'
@@ -14,21 +13,22 @@ import { TransferenciasInstitucion } from './transferencias/TransferenciasInstit
 //   - TAREA-6 y 7: stock de unidades
 //   - TAREA-15: stock contra demanda
 //   - TAREA-12: transferencias de unidades entre instituciones
-//   - TAREA-1: datos y estado de la institución
+// Los datos de la institución (TAREA-1) no son una pestaña: se abren desde "Mi institución" en la barra de arriba (App.jsx)
 const PESTANAS = [
   { id: 'necesidades', texto: 'Necesidades', icono: '🩸' },
   { id: 'agenda', texto: 'Agenda y turnos', icono: '🗓️' },
   { id: 'stock', texto: 'Stock', icono: '📦' },
   { id: 'demanda', texto: 'Stock y demanda', icono: '📊' },
   { id: 'transferencias', texto: 'Transferencias', icono: '🔄' },
-  { id: 'institucion', texto: 'Mi institución', icono: '🏥' },
 ]
 
 export function PanelInstitucion({ usuario, token, apiUrl, onCerrarSesion }) {
-  // La última pestaña abierta queda guardada: al recargar la página se vuelve ahí
+  // La última pestaña abierta queda guardada: al recargar la página se vuelve ahí.
+  // Si la guardada ya no existe (ej. "institucion", que pasó a la barra de arriba), se abre Necesidades
   const [pestana, setPestana] = useState(() => {
     try {
-      return localStorage.getItem('donavida_pestana') || 'necesidades'
+      const guardada = localStorage.getItem('donavida_pestana')
+      return PESTANAS.some((p) => p.id === guardada) ? guardada : 'necesidades'
     } catch {
       return 'necesidades'
     }
@@ -81,8 +81,6 @@ export function PanelInstitucion({ usuario, token, apiUrl, onCerrarSesion }) {
       )}
       {pestana === 'stock' && <StockInstitucion token={token} apiUrl={apiUrl} />}
       {pestana === 'demanda' && <StockDemanda token={token} apiUrl={apiUrl} />}
-      {pestana === 'transferencias' && <TransferenciasInstitucion token={token} apiUrl={apiUrl} />}
-      {pestana === 'institucion' && <DatosInstitucion token={token} apiUrl={apiUrl} />}
-    </>
+      {pestana === 'transferencias' && <TransferenciasInstitucion token={token} apiUrl={apiUrl} />}    </>
   )
 }
