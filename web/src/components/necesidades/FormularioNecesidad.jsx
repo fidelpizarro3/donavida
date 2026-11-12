@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { COMPONENTES } from './textos'
+import { COMPONENTES, grupoConFactor } from './textos'
 
 // Fecha de hoy + días, en formato YYYY-MM-DD (lo que espera <input type="date"> y la API)
 function fechaDentroDe(dias) {
@@ -22,8 +22,13 @@ const VALORES_INICIALES = {
 
 // Formulario para publicar una necesidad. Le avisa al padre con onPublicar(datos),
 // que devuelve true si se publicó (así se limpia el formulario).
-export function FormularioNecesidad({ onPublicar, publicando }) {
+// abiertas: las necesidades abiertas, para avisar si ya hay una igual (evita publicar duplicados sin darse cuenta)
+export function FormularioNecesidad({ onPublicar, onCancelar, publicando, abiertas = [] }) {
   const [datos, setDatos] = useState(VALORES_INICIALES)
+
+  const igual = abiertas.find((n) =>
+    n.grupoSanguineo === datos.grupoSanguineo && n.factorRh === datos.factorRh && n.componente === datos.componente
+  )
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -38,8 +43,8 @@ export function FormularioNecesidad({ onPublicar, publicando }) {
   }
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
-      <h3 className="card-title">Publicar una necesidad</h3>
+    <form className="formulario-necesidad" onSubmit={handleSubmit}>
+      <h4>Nueva necesidad</h4>
 
       <div className="form-grid">
         <div className="form-group">
@@ -106,9 +111,21 @@ export function FormularioNecesidad({ onPublicar, publicando }) {
         </div>
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={publicando}>
-        {publicando ? 'Publicando...' : 'Publicar necesidad'}
-      </button>
+      {igual && (
+        <div className="alert alert-warning">
+          Ya tenés una necesidad {grupoConFactor(igual.grupoSanguineo, igual.factorRh)} de {COMPONENTES[igual.componente].toLowerCase()} abierta
+          (le faltan {igual.unidadesFaltantes}). Si es para el mismo caso, corregí su cantidad desde el menú ⋯ en lugar de publicar otra.
+        </div>
+      )}
+
+      <div className="necesidad-acciones">
+        <button type="submit" className="btn btn-primary" disabled={publicando}>
+          {publicando ? 'Publicando...' : igual ? 'Publicar igual' : 'Publicar necesidad'}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={onCancelar} disabled={publicando}>
+          Cancelar
+        </button>
+      </div>
     </form>
   )
 }

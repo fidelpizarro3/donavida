@@ -2410,3 +2410,176 @@ input[type='radio'] {
   max-width: none;
   margin-bottom: 0.75rem;
 }
+
+/* ─── Necesidades: lista en filas ────────────────────────────────────────── */
+
+.texto-urgente {
+  color: var(--primary);
+}
+
+.pestana-contador {
+  display: inline-block;
+  min-width: 1.4rem;
+  margin-left: 0.25rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.pestana.activa .pestana-contador {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.formulario-necesidad {
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-alt);
+  border-radius: var(--radius);
+}
+
+.formulario-necesidad h4 {
+  margin: 0 0 0.75rem;
+}
+
+/* Las filas van pegadas, separadas por una línea: se leen como una lista y no como cajas sueltas */
+.necesidades-filas {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+.necesidades-filas:empty {
+  display: none;
+}
+
+.necesidad-fila {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid transparent;
+}
+
+.necesidad-fila + .necesidad-fila {
+  border-top: 1px solid var(--border-color);
+}
+
+.necesidad-fila-urgente {
+  border-left-color: var(--primary);
+}
+
+.necesidad-fila-principal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 9rem auto;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.necesidad-fila-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.necesidad-fila-datos strong {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.necesidad-fila-datos small,
+.necesidad-fila-progreso small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.necesidad-fila-progreso {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.necesidad-fila-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+/* Menú "⋯": las acciones secundarias de cada fila */
+.menu-acciones {
+  position: relative;
+}
+
+.menu-acciones-boton {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.menu-acciones-boton:hover {
+  background: var(--bg-alt);
+  color: var(--text-main);
+}
+
+.menu-acciones-lista {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.3rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.menu-acciones-lista button {
+  padding: 0.5rem 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-acciones-lista button:hover {
+  background: var(--bg-alt);
+}
+
+.menu-acciones-lista .menu-peligro {
+  color: var(--danger);
+}
+
+.necesidad-fila .necesidad-acciones {
+  margin-top: 0.75rem;
+}
+
+/* En el celular: el progreso baja a su propia línea, debajo de los datos */
+@media (max-width: 640px) {
+  .necesidad-fila-principal {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .necesidad-fila-progreso {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+
+.necesidad-fila .texto-en-camino {
+  color: var(--primary);
+  font-weight: 700;
+}

@@ -1,16 +1,29 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FormularioNecesidad } from './FormularioNecesidad'
 import { TarjetaNecesidad } from './TarjetaNecesidad'
-import { ESTADOS, avisamosQueNoVayan } from './textos'
+import { avisamosQueNoVayan } from './textos'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 import { Esqueleto } from '../comunes/Esqueleto'
+
+// Pestañas de la lista. Se trae todo una sola vez y se filtra acá, así cada pestaña muestra cuántas tiene
+const PESTANAS = [
+  { id: 'abierta', texto: 'Abiertas', incluye: ['abierta'] },
+  { id: 'cubierta', texto: 'Cubiertas', incluye: ['cubierta'] },
+  { id: 'cerrada', texto: 'Cerradas', incluye: ['cerrada_manual', 'vencida'] },
+  { id: 'todas', texto: 'Todas', incluye: null },
+]
+
+// Las urgentes primero; dentro de cada grupo, la que vence antes
+const porPrioridad = (a, b) =>
+  (b.urgencia === 'urgente') - (a.urgencia === 'urgente') || a.fechaLimite.localeCompare(b.fechaLimite)
 
 // TAREA-4 en el front: publicar, ver, corregir y cerrar las necesidades de la institución.
 // TAREA-8: convocar donantes para una necesidad abierta.
 // Toda la comunicación con la API pasa por la función pedir().
 export function NecesidadesInstitucion({ token, apiUrl }) {
   const [necesidades, setNecesidades] = useState([])
-  const [filtro, setFiltro] = useState('') // '' = todas
+  const [pestana, setPestana] = useState('abierta')
+  const [publicando, setPublicando] = useState(false) // formulario de nueva necesidad abierto
   const [cargando, setCargando] = useState(true)
   const [ocupado, setOcupado] = useState(false)
   const [mensaje, setMensaje] = useState(null)
@@ -32,23 +45,28 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
   // Cada vez que cambia esto, se vuelve a pedir la lista (después de publicar, corregir o cerrar)
   const [version, setVersion] = useState(0)
 
-  // Trae la lista al entrar, al cambiar el filtro y después de cada acción.
+  // Trae la lista al entrar y después de cada acción.
   // "activo" evita guardar la respuesta si el componente ya se cerró.
   useEffect(() => {
     let activo = true
-    pedir(filtro ? `?estado=${filtro}` : '')
+    pedir('')
       .then((datos) => { if (activo) setNecesidades(datos) })
       .catch((err) => { if (activo) setError(err.message) })
       .finally(() => { if (activo) setCargando(false) })
     return () => {
       activo = false
     }
-  }, [pedir, filtro, version])
+  }, [pedir, version])
 
-  const cambiarFiltro = (nuevoFiltro) => {
-    setCargando(true)
-    setFiltro(nuevoFiltro)
+  const deLaPestana = (id) => {
+    const { incluye } = PESTANAS.find((p) => p.id === id)
+    return incluye ? necesidades.filter((n) => incluye.includes(n.estado)) : necesidades
   }
+  const abiertas = deLaPestana('abierta')
+  const visibles = [...deLaPestana(pestana)].sort(porPrioridad)
+  // El resumen de arriba: lo que el hospital quiere saber antes que nada
+  const faltanTotal = abiertas.reduce((total, n) => total + n.unidadesFaltantes, 0)
+  const urgentes = abiertas.filter((n) => n.urgencia === 'urgente').length
 
   // Ejecuta una acción (publicar, corregir, cerrar), muestra el resultado y recarga la lista.
   // textoExito puede ser una función que arma el texto con la respuesta. Devuelve true si salió bien.
@@ -70,8 +88,14 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
     }
   }
 
-  const publicar = (datos) =>
-    ejecutar(() => pedir('', { method: 'POST', body: JSON.stringify(datos) }), 'Necesidad publicada: quedó abierta.')
+  const publicar = async (datos) => {
+    const publicada = await ejecutar(() => pedir('', { method: 'POST', body: JSON.stringify(datos) }), 'Necesidad publicada: quedó abierta.')
+    if (publicada) {
+      setPublicando(false)
+      setPestana('abierta') // para que se vea la que se acaba de publicar
+    }
+    return publicada
+  }
 
   const corregir = (idNecesidad, unidadesSolicitadas) =>
     ejecutar(
@@ -130,26 +154,48 @@ export function NecesidadesInstitucion({ token, apiUrl }) {
       <AvisoFlotante mensaje={mensaje} onCerrar={() => setMensaje(null)} />
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <FormularioNecesidad onPublicar={publicar} publicando={ocupado} />
-
       <section className="card">
         <div className="card-title">
-          <h3 style={{ margin: 0 }}>Necesidades publicadas</h3>
-          <select value={filtro} onChange={(e) => cambiarFiltro(e.target.value)} aria-label="Filtrar por estado">
-            <option value="">Todas</option>
-            {Object.entries(ESTADOS).map(([valor, { texto }]) => (
-              <option key={valor} value={valor}>{texto}</option>
-            ))}
-          </select>
+          <div>
+            <h3 style={{ margin: 0 }}>Necesidades</h3>
+            {!cargando && (
+              <small className="texto-suave">
+                {abiertas.length === 0
+                  ? 'No hay necesidades abiertas'
+                  : `${abiertas.length} ${abiertas.length === 1 ? 'abierta' : 'abiertas'} · ${faltanTotal === 1 ? 'falta 1 unidad' : `faltan ${faltanTotal} unidades`}`}
+                {urgentes > 0 && <> · <strong className="texto-urgente">{urgentes} {urgentes === 1 ? 'urgente' : 'urgentes'}</strong></>}
+              </small>
+            )}
+          </div>
+          {!publicando && (
+            <button type="button" className="btn btn-primary btn-chico" onClick={() => setPublicando(true)}>
+              + Publicar necesidad
+            </button>
+          )}
         </div>
 
-        {cargando && <Esqueleto />}
-        {!cargando && necesidades.length === 0 && (
-          <p className="texto-suave">No hay necesidades {filtro ? 'con ese estado' : 'publicadas todavía'}.</p>
+        {publicando && (
+          <FormularioNecesidad onPublicar={publicar} onCancelar={() => setPublicando(false)} publicando={ocupado} abiertas={abiertas} />
         )}
 
-        <div className="necesidades-lista">
-          {necesidades.map((necesidad) => (
+        <nav className="pestanas pestanas-chicas" role="tablist">
+          {PESTANAS.map(({ id, texto }) => (
+            <button key={id} type="button" role="tab" aria-selected={pestana === id} className={`pestana ${pestana === id ? 'activa' : ''}`} onClick={() => setPestana(id)}>
+              {texto} <span className="pestana-contador">{deLaPestana(id).length}</span>
+            </button>
+          ))}
+        </nav>
+
+        {cargando && <Esqueleto />}
+        {!cargando && visibles.length === 0 && (
+          <div className="vacio">
+            <span aria-hidden="true">🩸</span>
+            <p>{pestana === 'abierta' ? 'No tenés necesidades abiertas. Cuando falte sangre, publicá una.' : 'No hay necesidades en este estado.'}</p>
+          </div>
+        )}
+
+        <div className="necesidades-filas">
+          {visibles.map((necesidad) => (
             <TarjetaNecesidad
               // La key cambia con la cantidad, así la tarjeta se reinicia después de corregir
               key={`${necesidad.idNecesidad}-${necesidad.unidadesSolicitadas}-${necesidad.estado}`}
