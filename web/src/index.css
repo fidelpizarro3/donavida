@@ -521,6 +521,11 @@ h1, h2, h3 {
   max-width: 640px;
 }
 
+/* Panel de la institución y del admin: entran todas las pestañas en una fila sin deslizar */
+.container-ancho {
+  max-width: 1240px;
+}
+
 .pasos-alta {
   list-style: none;
   display: flex;
