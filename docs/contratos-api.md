@@ -114,7 +114,7 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
 | C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (con el cierre de la convocatoria y el agradecimiento de TAREA-13) |
-| C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) |
+| C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) ✅ implementado |
 | B | C | `GET /api/necesidades/:idNecesidad/cobertura` | Buscar unidades en la red antes de convocar (TAREA-14) ✅ implementado |
 | B | C | `POST /api/transferencias` | Pedir las unidades encontradas (12, 13) ✅ implementado (TAREA-12) |
 | B | C | _interno_ `registrarIngresoUnidad(datos, db)` | Cargar las unidades que genera una donación (5, 11) ✅ implementado |
@@ -585,23 +585,35 @@ llama a `enviarAgradecimientos(idNecesidad)` (también en `cierreNecesidad.js`):
 - **200:** la convocatoria (como arriba) con `decisionTurnos` y `avisados`.
 - **Errores:** 400, 404, 409 (necesidad no cubierta, convocatoria mantenida abierta, ya se decidió o nadie con turno).
 
-#### `GET /api/estadisticas/convocatorias`
+#### `GET /api/estadisticas/convocatorias` ✅ implementado (TAREA-19)
 
-- **Rol:** `institucion`, `admin`.
-- **Query:** `idInstitucion` (opcional para `admin`), `desde`, `hasta`, `grupoSanguineo` y `factorRh` (opcionales).
+- **Rol:** `institucion` aprobada (ve las suyas, aunque mande `idInstitucion`) o `admin` (toda la red, o una
+  institución con `idInstitucion`).
+- **Query (todos opcionales):** `desde` y `hasta` (`YYYY-MM-DD`; por defecto los últimos 90 días), `grupoSanguineo`,
+  `factorRh`, `idInstitucion` (solo `admin`).
+- **Qué cuenta:** las necesidades **publicadas** en el período (hora de Argentina), sus alertas que le llegaron al
+  donante (`enviadaEn` no nulo) y las unidades que se **vencieron** en el período (movimientos `vencimiento` de
+  TAREA-7, por `idInstitucionOrigen`). Solo lee.
 - **200:**
   ```json
   {
-    "necesidadesPublicadas": 20,
-    "necesidadesCubiertas": 17,
-    "horasPromedioHastaCubrir": 30.5,
-    "cubiertasPorDonantes": 11,
-    "cubiertasPorTransferencia": 4,
-    "cubiertasPorAmbas": 2,
-    "donantesConvocados": 140,
-    "donantesQueRespondieron": 52
+    "alcance": "institucion",
+    "periodo": { "desde": "2026-08-22", "hasta": "2026-11-19" },
+    "filtros": { "grupoSanguineo": null, "factorRh": null },
+    "necesidades": { "publicadas": 20, "cubiertas": 17, "porcentajeCubiertas": 85, "vencidasSinCubrir": 2, "cerradasAMano": 1, "abiertas": 0 },
+    "tiempoHastaCubrir": { "horasPromedio": 30.5, "horasMinimo": 4, "horasMaximo": 96 },
+    "cubiertasCon": { "donantes": 11, "transferencia": 4, "ambas": 2, "sinRegistrar": 0 },
+    "donantes": { "convocados": 140, "respondieron": 52, "porcentajeRespondieron": 37, "aceptaron": 40, "fueronAlTurno": 31, "faltaronAlTurno": 6 },
+    "unidadesVencidas": { "total": 3, "porGrupo": [{ "grupoSanguineo": "O", "factorRh": "positivo", "cantidad": 2 }] },
+    "porMes": [{ "mes": "2026-10", "publicadas": 8, "cubiertas": 7, "vencidas": 1 }]
   }
   ```
+  Los porcentajes y `tiempoHastaCubrir` son `null` si no hay datos para calcularlos. `sinRegistrar`: cubiertas antes
+  de que TAREA-13 guardara `cubierta_con`. `porMes` trae todos los meses del
+  período, también los que quedaron en cero.
+- **Errores:** 400 `DATOS_INVALIDOS` (fechas, grupo, factor o `idInstitucion` no válidos), 403 `SIN_PERMISO`.
+- **A confirmar con Joaquín:** las vencidas se leen de `movimiento_unidad` (dominio C) en modo lectura; si prefiere,
+  se reemplaza por una función suya.
 
 #### Alertas al donante (TAREA-11) ✅ implementado
 

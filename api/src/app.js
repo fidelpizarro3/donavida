@@ -18,6 +18,7 @@ const publicoRoutes = require('./routes/publico.routes');
 const transferenciasRoutes = require('./routes/transferencias.routes');
 const cierreRoutes = require('./routes/cierre.routes');
 const panelRoutes = require('./routes/panel.routes');
+const estadisticasRoutes = require('./routes/estadisticas.routes');
 
 const app = express();
 app.use(cors());
@@ -41,6 +42,7 @@ app.use('/api/publico', publicoRoutes); // datos de la página de inicio, sin lo
 app.use('/api/transferencias', transferenciasRoutes); // transferencias entre instituciones (TAREA-12)
 app.use('/api/convocatorias', cierreRoutes); // qué pasa con la convocatoria cuando la necesidad se cubre (TAREA-13)
 app.use('/api/panel', panelRoutes); // cuadro de stock contra demanda (TAREA-15)
+app.use('/api/estadisticas', estadisticasRoutes); // estadísticas de convocatorias y donaciones (TAREA-19)
 
 // Express 5 manda acá también los errores de las rutas async, sin necesidad de try/catch
 app.use((err, req, res, next) => {

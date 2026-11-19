@@ -103,6 +103,10 @@ export default function App() {
 
   const esDonante = !usuario || usuario.rol === 'donante'
   const enAlta = vista === 'registro' || vista === 'registro-institucion' || vista === 'verificar' || (vista === 'login' && vieneDelAlta)
+  // Ancho de la página: el hospital y el admin trabajan desde la computadora y ven mucha información junta
+  // (tablas, gráficos, siete pestañas): usan casi toda la pantalla. El donante usa el celular. Login y alta, angostos.
+  let claseAncho = 'container-angosto'
+  if (vista === 'perfil') claseAncho = esDonante ? '' : 'container-ancho'
 
   return (
     <div className="app">
@@ -142,7 +146,7 @@ export default function App() {
       )}
 
       {vista !== 'inicio' && (
-        <main className={`container ${vista === 'perfil' ? '' : 'container-angosto'}`}>
+        <main className={`container ${claseAncho}`}>
           {enAlta && <PasosAlta actual={{ registro: 0, 'registro-institucion': 0, verificar: 1, login: 2 }[vista]} />}
 
           {vista === 'registro' && (

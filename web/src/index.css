@@ -521,6 +521,11 @@ h1, h2, h3 {
   max-width: 640px;
 }
 
+/* Panel de la institución y del admin: entran todas las pestañas en una fila sin deslizar */
+.container-ancho {
+  max-width: 1240px;
+}
+
 .pasos-alta {
   list-style: none;
   display: flex;
@@ -2409,4 +2414,101 @@ input[type='radio'] {
 .texto-ancho {
   max-width: none;
   margin-bottom: 0.75rem;
+}
+
+/* ─── Estadísticas de convocatorias y donaciones (TAREA-19) ──────────────── */
+
+.estadisticas-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.estadisticas-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+
+.estadisticas-filtros .form-group {
+  min-width: 10rem;
+}
+
+.estadisticas-periodo {
+  max-width: none;
+  margin: 0 0 1rem;
+}
+
+.estadisticas-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.estadistica-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-alt);
+}
+
+.estadistica-titulo {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.estadistica-valor {
+  font-size: 1.7rem;
+  color: var(--primary-dark);
+  line-height: 1.2;
+}
+
+.estadistica-tarjeta small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.estadisticas-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.estadistica-grafico {
+  min-width: 0;
+}
+
+.estadistica-grafico h4 {
+  margin: 0 0 0.5rem;
+}
+
+/* Imprimir o guardar PDF: solo sale el panel de estadísticas, sin botones ni filtros */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .estadisticas,
+  .estadisticas * {
+    visibility: visible;
+  }
+
+  .estadisticas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .estadisticas-acciones,
+  .estadisticas-filtros {
+    display: none;
+  }
 }
