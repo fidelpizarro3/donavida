@@ -3,6 +3,7 @@ import { TarjetaAdminInstitucion } from './TarjetaAdminInstitucion'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 import { Esqueleto } from '../comunes/Esqueleto'
 import { StockDemanda } from '../panel/StockDemanda'
+import { Estadisticas } from '../estadisticas/Estadisticas'
 
 // Filtros del listado: cada uno se manda como ?estado= (vacío = todas)
 const FILTROS = [
@@ -145,6 +146,9 @@ export function PanelAdmin({ usuario, token, apiUrl, onCerrarSesion }) {
 
       {/* TAREA-15: el mismo cuadro de stock contra demanda, sumando toda la red */}
       <StockDemanda token={token} apiUrl={apiUrl} esAdmin />
+
+      {/* TAREA-19: las mismas estadísticas que ve cada institución, sumando toda la red */}
+      <Estadisticas token={token} apiUrl={apiUrl} esAdmin />
     </>
   )
 }
