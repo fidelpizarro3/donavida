@@ -12,7 +12,8 @@ const CLAVE_SIN_CONEXION = 'donavida_proximo_turno'
 //   - si no: no muestra nada
 // El turno se guarda en el navegador: si no hay conexión, se sigue viendo (criterio "sin conexión").
 // "actualizar" lo cambia el perfil cuando el donante responde una alerta, para volver a mirar.
-export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
+// "onCambio" avisa que reservó, cambió o canceló el turno (TAREA-18: el carné muestra el QR del turno nuevo).
+export function TurnoDonante({ token, apiUrl, actualizar = 0, onCambio }) {
   const [estado, setEstado] = useState({ turno: null, alerta: null, franjas: [] })
   const [sinConexion, setSinConexion] = useState(null) // { guardadoEn } si se muestra la copia guardada
   const [cargando, setCargando] = useState(true)
@@ -95,6 +96,7 @@ export function TurnoDonante({ token, apiUrl, actualizar = 0 }) {
       await accion()
       setMensaje(textoExito)
       setModo(null)
+      onCambio?.()
     } catch (err) {
       // Por ejemplo, si justo otro donante se quedó con el último lugar: la API manda el motivo
       setError(err.message)

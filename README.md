@@ -124,6 +124,9 @@ Los roles son `donante`, `institucion` y `admin` (columna `usuario.rol`).
 | `POST /api/auth/login` | Body: `{ email, password }`. Devuelve `{ token, usuario }`; el token dura 8 horas. Hasta verificar el correo responde 403 `EMAIL_NO_VERIFICADO` |
 | `GET /api/auth/me` | Devuelve el usuario del token |
 | `GET` / `PATCH /api/donantes/perfil` | Perfil del donante: horario de contacto preferido y pausa de alertas. Si no sabía su grupo al registrarse, lo puede declarar una sola vez (`grupoSanguineo` y `factorRh` juntos); después no se cambia (409) |
+| `GET /api/donantes/carne` | "Mi carné" del donante: nombre, grupo, cuántas veces donó, desde cuándo puede volver a donar y el código QR de su próximo turno (`null` si no tiene). El front lo guarda para verlo sin conexión |
+| `GET /api/turnos/qr/:codigo` | Para instituciones aprobadas: escanear el carné. Devuelve la ficha del donante y su turno de hoy, listo para registrar la donación. Si el QR está vencido, ya se usó o es de otra institución, responde el motivo |
+| `GET /api/donaciones/:idDonacion/comprobante` | El donante descarga en PDF el comprobante de una donación suya realizada |
 | `GET` / `POST /api/donantes/cuestionario` | Cuestionario de aptitud del donante: solo repregunta lo que puede cambiar |
 | `GET /api/donantes/:idDonante/habilitacion` | Si puede donar hoy y, si no, el motivo y la fecha de reingreso |
 | `POST /api/donantes/:idDonante/diferimientos` y `/donacion-registrada` | Para instituciones aprobadas: marcar no apto, y empezar la espera de 56 días tras una donación |

@@ -110,8 +110,8 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
 | B | A | `POST /api/donantes/:idDonante/donacion-registrada` | Reiniciar el período de espera y completar el grupo (11) ✅ implementado |
 | B | A | `POST /api/donantes/:idDonante/diferimientos` | Marcar a una persona como no apta (3, 11) ✅ implementado |
 | B | A | `POST /api/asistente/consultas` | Interpretar una necesidad escrita en lenguaje natural (16) |
-| A | B | `GET /api/donaciones?idDonante=` | Historial y cantidad de donaciones para el carné (18) |
-| A | B | `GET /api/turnos/proximo?idDonante=` | Próximo turno y su código QR para el carné (18) |
+| A | B | Cantidad de donaciones `realizada` del donante (consulta de `donacion` en `api/src/services/carne.js`) | Cantidad de donaciones para el carné (18) ✅ implementado (TAREA-18) |
+| A | B | _interno_ `buscarProximoTurno(idDonante, { idInstitucion, conInstitucion })` (`api/src/services/turnos.js`) | Próximo turno y su código QR para el carné (18) ✅ implementado (TAREA-18); también lo usa `GET /api/turnos/proximo` |
 | C | B | `GET /api/necesidades` | Demanda abierta para el panel stock vs. demanda (15) |
 | C | B | _interno_ `sumarCobertura(idNecesidad, unidades, db)` y `cerrarSiCubierta(idNecesidad, db)` | Sumar lo cubierto por una transferencia y cerrar la necesidad (13, 14) ✅ implementado (con el cierre de la convocatoria y el agradecimiento de TAREA-13) |
 | C | B | `GET /api/estadisticas/convocatorias` | Datos de convocatorias para el panel de estadísticas (19) ✅ implementado |
@@ -218,6 +218,44 @@ Son los definidos en `schema.prisma`; cambiarlos requiere una migración.
   - `alertasPausadasHasta`: fecha `"YYYY-MM-DD"` presente o futura para pausar alertas, o `null` para reanudarlas de inmediato.
 - **200:** el perfil actualizado con la misma estructura que en `GET /api/donantes/perfil`.
 - **Errores:** 400 `DATOS_INVALIDOS`, 401 `NO_AUTENTICADO`, 403 `SIN_PERMISO`, 404 `NO_ENCONTRADO`.
+
+#### `GET /api/donantes/carne` ✅ implementado (TAREA-18)
+
+Los datos de "Mi carné" (carné digital del donante).
+
+- **Rol:** `donante` autenticado.
+- **200:**
+  ```json
+  {
+    "idUsuario": "<uuid>",
+    "nombre": "Ana",
+    "apellido": "Paz",
+    "grupoSanguineo": "O",
+    "factorRh": "negativo",
+    "totalDonaciones": 2,
+    "habilitado": false,
+    "aptoDesde": "2027-01-19",
+    "motivo": "Donó sangre el 24/11/2026. Deben pasar 56 días entre donaciones de sangre entera.",
+    "proximoTurno": {
+      "idTurno": "<uuid>",
+      "codigoQr": "9f86d081884c7d659a2feaa0c55ad015",
+      "fecha": "2026-11-26",
+      "horaInicio": "08:00",
+      "horaFin": "12:00",
+      "institucion": { "nombre": "Hospital Central", "direccion": "Av. Argentina 1400" }
+    }
+  }
+  ```
+  - `totalDonaciones` cuenta solo las `realizada` (si lo rechazó el control médico, no donó).
+  - `habilitado`, `aptoDesde` y `motivo` salen de `obtenerHabilitacion()` (TAREA-3), igual que en el historial.
+  - `proximoTurno` es el turno `reservado` más próximo de hoy en adelante, o `null` si no tiene. `codigoQr` es
+    `turno.codigo_qr`: 32 caracteres hexadecimales al azar, uno distinto en cada turno (al reprogramar se mantiene,
+    porque es el mismo turno). El QR lleva solo ese código: el front lo dibuja y lo lee el hospital con
+    `GET /api/turnos/qr/:codigo`.
+  - No trae datos sensibles (ni documento, ni fecha de nacimiento, ni email).
+- **Sin conexión:** el front guarda la respuesta en el navegador con una clave por usuario (`donavida_carne_<idUsuario>`)
+  y la muestra si no hay conexión; al cerrar sesión se borra.
+- **Errores:** 401 `NO_AUTENTICADO`, 403 `SIN_PERMISO` (otro rol), 404 `NO_ENCONTRADO` (sin perfil de donante).
 
 #### `GET /api/instituciones/:idInstitucion`
 
@@ -684,6 +722,48 @@ corresponde, la alerta queda `cancelada`. La respuesta de la convocatoria trae e
 - `GET /api/donaciones/mias` (donante): `{ habilitado, aptoDesde, motivo, totalDonaciones, donaciones: [{ fecha,
   resultado, institucion: { nombre, direccion } }] }`.
 - **Sin conexión:** el front guarda el próximo turno y el historial en el navegador, y el service worker guarda la app.
+
+#### `GET /api/turnos/qr/:codigo` ✅ implementado (TAREA-18)
+
+El hospital escanea el carné del donante y ve su ficha y su turno de hoy, listo para registrar la donación con
+`POST /api/donaciones`. En el front, "Agenda y turnos" → "Escanear carné": se lee con un lector de códigos USB
+o el teclado (campo + Enter), pegando o eligiendo una imagen del QR, o con la cámara de la computadora.
+
+- **Rol:** `institucion` (aprobada).
+- `:codigo` acepta mayúsculas y espacios (como lo escribe un lector USB o se copia del carné): se normaliza antes de buscar.
+- **200:** el turno con la misma forma que cada ítem de `GET /api/turnos?fecha=`, y además `donante.totalDonaciones`:
+  ```json
+  {
+    "idTurno": "<uuid>",
+    "estado": "reservado",
+    "codigoQr": "9f86d081884c7d659a2feaa0c55ad015",
+    "fecha": "2026-11-26",
+    "horaInicio": "08:00",
+    "horaFin": "12:00",
+    "idInstitucion": "<uuid>",
+    "idAlerta": "<uuid>",
+    "donante": { "idDonante": "<uuid>", "nombre": "Ana", "apellido": "Paz", "documento": "35123456",
+                 "grupoSanguineo": "O", "factorRh": "negativo", "totalDonaciones": 2 },
+    "resultadoDonacion": null
+  }
+  ```
+- **Errores (con el motivo en `mensaje`):**
+  - 400 `DATOS_INVALIDOS`: "Este QR no es de un carné de DonaVida" (no son 32 caracteres hexadecimales).
+  - 403 `SIN_PERMISO`: "Tu institución no está aprobada" / "Este turno es en otra institución".
+  - 404 `NO_ENCONTRADO`: "Este QR no corresponde a ningún turno".
+  - 409 `CONFLICTO`: "QR vencido: el turno era el lunes 23/11" (pasó la fecha sin registrarse), "Este QR ya se usó: el turno
+    del martes 24/11 ya quedó registrado", "El donante canceló este turno" o "El turno es el miércoles 25/11: se registra ese día".
+
+#### `GET /api/donaciones/:idDonacion/comprobante` ✅ implementado (TAREA-18)
+
+- **Rol:** `donante`, solo de sus propias donaciones.
+- **200:** el comprobante en PDF (`Content-Type: application/pdf`, se descarga como
+  `comprobante-donacion-YYYY-MM-DD.pdf`). Lleva nombre y apellido, DNI, fecha, lugar, el grupo confirmado (si se
+  confirmó) y el `idDonacion` como código del comprobante. Lo arma `api/src/services/comprobante.js` con `pdfkit`.
+- **Errores:** 400 `DATOS_INVALIDOS` (id inválido), 403 `SIN_PERMISO` (otro rol), 404 `NO_ENCONTRADO` (no existe o
+  es de otro donante: mismo mensaje), 409 `CONFLICTO` ("Solo hay comprobante de las donaciones realizadas": si lo
+  rechazó el control médico no hubo donación).
+- En el front, cada donación `realizada` del historial ("Mis donaciones") tiene "Descargar comprobante (PDF)".
 
 ### Dominio C — Inventario y red
 

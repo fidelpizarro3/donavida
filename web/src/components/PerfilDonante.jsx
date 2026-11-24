@@ -6,6 +6,9 @@ import { TurnoDonante } from './agenda/TurnoDonante'
 import { HistorialDonante } from './agenda/HistorialDonante'
 import { AvisoFlotante } from './comunes/AvisoFlotante'
 import { DeclararGrupo } from './DeclararGrupo'
+import { CarneDonante } from './carne/CarneDonante'
+
+const SIN_CONEXION = 'Estás sin conexión. Cuando vuelva, vas a ver tu perfil completo.'
 
 function obtenerFechaHoy() {
   const ahora = new Date()
@@ -15,7 +18,7 @@ function obtenerFechaHoy() {
   return `${y}-${m}-${d}`
 }
 
-export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
+export function PerfilDonante({ token, usuario, onCerrarSesion, apiUrl }) {
   const [perfil, setPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [guardandoHorarios, setGuardandoHorarios] = useState(false)
@@ -24,6 +27,8 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
   const [error, setError] = useState(null)
   // Cambia cuando el donante responde una alerta: le avisa a la sección del turno que vuelva a mirar
   const [alertasRespondidas, setAlertasRespondidas] = useState(0)
+  // Cambia cuando reserva, cambia o cancela el turno: el carné vuelve a pedir el QR (TAREA-18)
+  const [turnoCambios, setTurnoCambios] = useState(0)
 
   // Estados locales editables
   const [horaDesde, setHoraDesde] = useState('')
@@ -50,7 +55,8 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
           setHoraHasta(data.contactoHoraHasta || '')
         }
       } catch (err) {
-        if (activo) setError(err.message)
+        // Sin conexión (o sin llegar a la API) el fetch falla con TypeError
+        if (activo) setError(err instanceof TypeError || !navigator.onLine ? SIN_CONEXION : err.message)
       } finally {
         if (activo) setCargando(false)
       }
@@ -187,12 +193,17 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
   }
 
   if (error && !perfil) {
+    const sinConexion = error === SIN_CONEXION
     return (
-      <div className="card">
-        <div className="alert alert-danger">{error}</div>
-        <button type="button" className="btn btn-secondary" onClick={onCerrarSesion}>
-          Cerrar Sesión
-        </button>
+      <div>
+        <div className="card">
+          <div className={`alert ${sinConexion ? 'alert-warning' : 'alert-danger'}`}>{error}</div>
+          <button type="button" className="btn btn-secondary" onClick={onCerrarSesion}>
+            Cerrar Sesión
+          </button>
+        </div>
+        {/* TAREA-18: sin conexión se sigue viendo el carné (la copia guardada en este dispositivo) */}
+        {sinConexion && <CarneDonante token={token} apiUrl={apiUrl} idUsuario={usuario?.idUsuario} />}
       </div>
     )
   }
@@ -253,9 +264,17 @@ export function PerfilDonante({ token, onCerrarSesion, apiUrl }) {
         </div>
       </div>
 
+      {/* TAREA-18: carné digital con el QR del próximo turno */}
+      <CarneDonante token={token} apiUrl={apiUrl} idUsuario={perfil.idUsuario} actualizar={turnoCambios} />
+
       {/* TAREA-11: alertas de las instituciones que lo convocaron */}
       <MisAlertas token={token} apiUrl={apiUrl} onRespondida={() => setAlertasRespondidas((n) => n + 1)} />
-      <TurnoDonante token={token} apiUrl={apiUrl} actualizar={alertasRespondidas} />
+      <TurnoDonante
+        token={token}
+        apiUrl={apiUrl}
+        actualizar={alertasRespondidas}
+        onCambio={() => setTurnoCambios((n) => n + 1)}
+      />
 
       {/* DV-11: dónde donó, cuándo y desde qué fecha puede volver */}
       <HistorialDonante token={token} apiUrl={apiUrl} actualizar={alertasRespondidas} />

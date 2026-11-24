@@ -2487,6 +2487,240 @@ input[type='radio'] {
   margin: 0 0 0.5rem;
 }
 
+/* ─── Carné digital del donante y lector de QR (TAREA-18) ─────────────── */
+
+.carne {
+  border-top: 4px solid var(--primary);
+}
+
+.carne-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.carne-cabecera h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.35rem;
+}
+
+.carne-marca {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.carne-datos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.carne-dato {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--warning-light);
+}
+
+.carne-dato:first-child {
+  background: var(--bg-alt);
+}
+
+.carne-dato:first-child strong {
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.carne-dato span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.carne-dato-ok {
+  background: var(--success-light);
+}
+
+.carne-qr {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary-light), var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.carne-qr img,
+.carne-qr-cargando {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--border-color);
+}
+
+.carne-qr-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.92rem;
+}
+
+.carne-qr-datos > strong {
+  font-size: 1.1rem;
+}
+
+.carne-qr-datos .texto-suave {
+  margin: 0 0 0.25rem;
+}
+
+.carne-codigo-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.carne-codigo {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.carne-sin-turno {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.carne-codigo-fila .btn-link,
+.carne .necesidad-acciones .btn-link,
+.linea-tiempo-comprobante {
+  margin-top: 0;
+}
+
+.linea-tiempo-comprobante {
+  align-self: flex-start;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.turnos-cabecera-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.lector-qr {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 2px dashed color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+}
+
+.lector-qr label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.lector-qr-fila {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lector-qr-fila input {
+  flex: 1;
+  min-width: 0;
+}
+
+.lector-qr .necesidad-acciones {
+  margin-top: 0.75rem;
+}
+
+.lector-qr .alert {
+  margin: 0.75rem 0 0;
+}
+
+.lector-qr-video {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.lector-qr-video video {
+  width: 100%;
+  max-width: 26rem;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+.turno-escaneado {
+  border: 2px solid var(--primary);
+  background: linear-gradient(135deg, var(--primary-light), var(--card-bg));
+  margin-bottom: 1.25rem;
+}
+
+.turno-escaneado-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.turno-escaneado-cerrar {
+  padding: 0 0.25rem;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .carne-qr {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .carne-qr img,
+  .carne-qr-cargando {
+    align-self: center;
+  }
+
+  .carne-datos {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Imprimir o guardar PDF: solo sale el panel de estadísticas, sin botones ni filtros */
 @media print {
   body * {

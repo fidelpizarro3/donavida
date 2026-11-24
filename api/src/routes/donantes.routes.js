@@ -16,6 +16,7 @@ const {
   formatearFecha,
   parsearFecha,
 } = require('../utils/formateadores');
+const { armarCarne } = require('../services/carne');
 
 const router = Router();
 
@@ -69,6 +70,16 @@ router.get('/perfil', autenticar, autorizar('donante'), async (req, res) => {
   }
 
   res.json(mapearPerfilDonante(donante));
+});
+
+// GET /api/donantes/carne: el carné digital del donante autenticado (TAREA-18).
+// Lo muestra "Mi carné" y el front lo guarda para verlo sin conexión
+router.get('/carne', autenticar, autorizar('donante'), async (req, res) => {
+  const carne = await armarCarne(req.usuario.id);
+  if (!carne) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Perfil de donante no encontrado' } });
+  }
+  res.json(carne);
 });
 
 const CANALES_AVISO = ['avisoPush', 'avisoEmail', 'avisoWhatsapp'];
