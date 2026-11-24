@@ -8,6 +8,7 @@ import { PerfilDonante } from './components/PerfilDonante'
 import { PanelInstitucion } from './components/PanelInstitucion'
 import { RegistroInstitucion } from './components/instituciones/RegistroInstitucion'
 import { PanelAdmin } from './components/admin/PanelAdmin'
+import { borrarCarnesGuardados } from './components/carne/textos'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const PASOS_ALTA = ['Tus datos', 'Activar cuenta', 'Iniciar sesión']
@@ -83,6 +84,7 @@ export default function App() {
   const handleCerrarSesion = () => {
     localStorage.removeItem('donavida_token')
     localStorage.removeItem('donavida_usuario')
+    borrarCarnesGuardados() // TAREA-18: el carné guardado para verlo sin conexión no queda en el dispositivo
     setToken('')
     setUsuario(null)
     irA('inicio')
@@ -188,7 +190,7 @@ export default function App() {
           )}
 
           {vista === 'perfil' && token && esDonante && (
-            <PerfilDonante token={token} onCerrarSesion={handleCerrarSesion} apiUrl={API_URL} />
+            <PerfilDonante token={token} usuario={usuario} onCerrarSesion={handleCerrarSesion} apiUrl={API_URL} />
           )}
 
           {vista === 'perfil' && token && usuario?.rol === 'institucion' && (

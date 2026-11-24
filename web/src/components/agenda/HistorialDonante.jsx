@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react'
 import { fechaLegible } from '../necesidades/textos'
 import { partesDeFecha, RESULTADOS_DONACION, guardarSinConexion, leerSinConexion } from './textos'
+import { descargarArchivo } from '../carne/textos'
 
 const CLAVE_SIN_CONEXION = 'donavida_historial'
 
 // DV-11 en el front, lado del donante: dónde donó, cuándo y desde qué fecha puede volver.
 // Se actualiza solo cuando el hospital registra la donación, y se guarda para verlo sin conexión.
 // "actualizar" lo cambia el perfil para volver a pedirlo.
+// TAREA-18: de cada donación realizada se puede descargar el comprobante en PDF
 export function HistorialDonante({ token, apiUrl, actualizar = 0 }) {
   const [historial, setHistorial] = useState(null)
   const [sinConexion, setSinConexion] = useState(false)
   const [error, setError] = useState(null)
+  const [descargando, setDescargando] = useState(null) // la donación cuyo comprobante se está bajando
+  const [problema, setProblema] = useState(null) // no se pudo bajar el comprobante (el historial se sigue viendo)
 
   useEffect(() => {
     let activo = true
@@ -40,6 +44,25 @@ export function HistorialDonante({ token, apiUrl, actualizar = 0 }) {
       activo = false
     }
   }, [apiUrl, token, actualizar])
+
+  const descargarComprobante = async (donacion) => {
+    setDescargando(donacion.idDonacion)
+    setProblema(null)
+    try {
+      const res = await fetch(`${apiUrl}/api/donaciones/${donacion.idDonacion}/comprobante`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error?.mensaje || 'No se pudo descargar el comprobante')
+      }
+      descargarArchivo(await res.blob(), `comprobante-donacion-${donacion.fecha}.pdf`)
+    } catch (err) {
+      setProblema(navigator.onLine ? err.message : 'Para descargar el comprobante hace falta conexión.')
+    } finally {
+      setDescargando(null)
+    }
+  }
 
   if (error) return <div className="card"><div className="alert alert-danger">{error}</div></div>
   if (!historial) return null
@@ -73,6 +96,8 @@ export function HistorialDonante({ token, apiUrl, actualizar = 0 }) {
         </div>
       </div>
 
+      {problema && <div className="alert alert-danger">{problema}</div>}
+
       {donaciones.length === 0 ? (
         <p className="texto-suave">Todavía no tenés donaciones registradas. ¡La primera es la más importante!</p>
       ) : (
@@ -86,6 +111,17 @@ export function HistorialDonante({ token, apiUrl, actualizar = 0 }) {
                 <span className="linea-tiempo-datos">
                   <strong>{d.institucion.nombre}</strong>
                   <small>{d.institucion.direccion}</small>
+                  {/* Criterio: después de donar puede descargar un comprobante (el PDF lo arma la API: necesita conexión) */}
+                  {d.resultado === 'realizada' && !sinConexion && (
+                    <button
+                      type="button"
+                      className="btn-link linea-tiempo-comprobante"
+                      onClick={() => descargarComprobante(d)}
+                      disabled={descargando !== null}
+                    >
+                      {descargando === d.idDonacion ? 'Descargando...' : 'Descargar comprobante (PDF)'}
+                    </button>
+                  )}
                 </span>
                 <span className={`badge ${resultado.clase}`}>{resultado.texto}</span>
               </li>

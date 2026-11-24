@@ -8,6 +8,8 @@ const { datosInvalidos, esFechaValida, obtenerFechaHoy } = require('../utils/val
 const { formatearFecha, formatearHora, parsearFecha } = require('../utils/formateadores');
 const { obtenerHabilitacion } = require('../services/habilitacion');
 const { recibeDonantes } = require('../services/cierreNecesidad');
+const { buscarProximoTurno } = require('../services/turnos');
+const { fechaConDia } = require('../services/recordatorios');
 
 const router = Router();
 
@@ -18,6 +20,8 @@ const UUID_VALIDO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 function generarCodigoQr() {
   return randomBytes(16).toString('hex');
 }
+// Así es un código de generarCodigoQr: 32 caracteres hexadecimales
+const CODIGO_QR_VALIDO = /^[0-9a-f]{32}$/;
 
 // Un error con su código HTTP: se lanza adentro de la transacción para deshacerla y responder bien
 class ErrorReserva extends Error {
@@ -40,6 +44,32 @@ function mapearTurno(turno) {
     idInstitucion: turno.franjaHoraria.idInstitucion,
     idAlerta: turno.idAlerta, // con la alerta, el front sabe hasta qué fecha puede reprogramar
   };
+}
+
+// Un turno con los datos del donante, como lo ve el hospital: la lista del día (DV-11) y el escaneo del carné (TAREA-18)
+function mapearTurnoDelDia(turno) {
+  return {
+    ...mapearTurno(turno),
+    donante: {
+      idDonante: turno.donante.idDonante,
+      nombre: turno.donante.usuario.nombre,
+      apellido: turno.donante.usuario.apellido,
+      documento: turno.donante.documento,
+      grupoSanguineo: turno.donante.grupoSanguineo, // null si todavía no lo sabe: se confirma al donar
+      factorRh: turno.donante.factorRh,
+    },
+    resultadoDonacion: turno.donacion?.resultado ?? null,
+  };
+}
+
+// TAREA-18: por qué el QR escaneado no sirve para registrar la donación hoy, o null si sirve.
+// Sirve solo el de un turno reservado para hoy: así no sirve una captura de un turno viejo
+function motivoQrNoValido(turno, fecha, hoy) {
+  if (turno.estado === 'cancelado') return 'El donante canceló este turno';
+  if (turno.estado !== 'reservado') return `Este QR ya se usó: el turno del ${fechaConDia(fecha)} ya quedó registrado`;
+  if (fecha < hoy) return `QR vencido: el turno era el ${fechaConDia(fecha)}`;
+  if (fecha > hoy) return `El turno es el ${fechaConDia(fecha)}: se registra ese día`;
+  return null;
 }
 
 // Busca un turno del donante logueado, con lo necesario para cancelarlo o reprogramarlo.
@@ -92,17 +122,7 @@ router.get('/proximo', autenticar, autorizar('donante', 'institucion'), async (r
     }
   }
 
-  const turno = await prisma.turno.findFirst({
-    where: {
-      idDonante,
-      estado: 'reservado',
-      // Se puede filtrar por campos de una tabla relacionada: la fecha está en la franja, no en el turno
-      franjaHoraria: { fecha: { gte: parsearFecha(obtenerFechaHoy()) }, idInstitucion },
-    },
-    orderBy: [{ franjaHoraria: { fecha: 'asc' } }, { franjaHoraria: { horaInicio: 'asc' } }],
-    include: { franjaHoraria: true },
-  });
-
+  const turno = await buscarProximoTurno(idDonante, { idInstitucion });
   res.json(turno ? mapearTurno(turno) : null);
 });
 
@@ -221,18 +241,47 @@ router.get('/', autenticar, autorizar('institucion'), async (req, res) => {
     orderBy: [{ franjaHoraria: { horaInicio: 'asc' } }],
   });
 
-  res.json(turnos.map((turno) => ({
-    ...mapearTurno(turno),
-    donante: {
-      idDonante: turno.donante.idDonante,
-      nombre: turno.donante.usuario.nombre,
-      apellido: turno.donante.usuario.apellido,
-      documento: turno.donante.documento,
-      grupoSanguineo: turno.donante.grupoSanguineo, // null si todavía no lo sabe: se confirma al donar
-      factorRh: turno.donante.factorRh,
+  res.json(turnos.map(mapearTurnoDelDia));
+});
+
+// GET /api/turnos/qr/:codigo: el hospital escanea el carné del donante (TAREA-18) y ve su ficha y su turno
+// de hoy, listo para registrar la donación con POST /api/donaciones (DV-11).
+// Si el QR no sirve (vencido, ya usado, de otra institución), responde el motivo claro
+router.get('/qr/:codigo', autenticar, autorizar('institucion'), async (req, res) => {
+  // Los lectores USB y el pegado pueden traerlo en mayúsculas o con espacios
+  const codigo = req.params.codigo.replace(/\s/g, '').toLowerCase();
+  if (!CODIGO_QR_VALIDO.test(codigo)) {
+    return datosInvalidos(res, 'Este QR no es de un carné de DonaVida');
+  }
+
+  const idInstitucion = await buscarInstitucionAprobada(req.usuario.id);
+  if (!idInstitucion) {
+    return res.status(403).json({ error: { codigo: 'SIN_PERMISO', mensaje: 'Tu institución no está aprobada' } });
+  }
+
+  const turno = await prisma.turno.findUnique({
+    where: { codigoQr: codigo },
+    include: {
+      franjaHoraria: true,
+      donacion: true,
+      donante: { include: { usuario: { select: { nombre: true, apellido: true } } } },
     },
-    resultadoDonacion: turno.donacion?.resultado ?? null,
-  })));
+  });
+  if (!turno) {
+    return res.status(404).json({ error: { codigo: 'NO_ENCONTRADO', mensaje: 'Este QR no corresponde a ningún turno' } });
+  }
+  if (turno.franjaHoraria.idInstitucion !== idInstitucion) {
+    return res.status(403).json({ error: { codigo: 'SIN_PERMISO', mensaje: 'Este turno es en otra institución' } });
+  }
+  const motivo = motivoQrNoValido(turno, formatearFecha(turno.franjaHoraria.fecha), obtenerFechaHoy());
+  if (motivo) {
+    return res.status(409).json({ error: { codigo: 'CONFLICTO', mensaje: motivo } });
+  }
+
+  // La ficha suma cuántas veces donó (las realizadas, como el carné)
+  const totalDonaciones = await prisma.donacion.count({ where: { idDonante: turno.idDonante, resultado: 'realizada' } });
+  const ficha = mapearTurnoDelDia(turno);
+  res.json({ ...ficha, donante: { ...ficha.donante, totalDonaciones } });
 });
 
 // PATCH /api/turnos/:idTurno: el donante reprograma su turno a otra franja del mismo hospital

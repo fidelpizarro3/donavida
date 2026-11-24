@@ -12,6 +12,7 @@ const { formatearFecha } = require('../utils/formateadores');
 const { registrarIngresoUnidad } = require('../services/unidades');
 const { registrarDonacion, obtenerHabilitacion } = require('../services/habilitacion');
 const { sumarCobertura, enviarAgradecimientos } = require('../services/cierreNecesidad');
+const { lineasDelComprobante, generarPdfComprobante } = require('../services/comprobante');
 
 const router = Router();
 
@@ -190,6 +191,33 @@ router.get('/mias', autenticar, autorizar('donante'), async (req, res) => {
       institucion: d.institucion,
     })),
   });
+});
+
+// GET /api/donaciones/:idDonacion/comprobante: el donante descarga el comprobante de una donación en PDF (TAREA-18).
+// Solo de las suyas, y solo si donó: si lo rechazó el control médico, no hubo donación
+router.get('/:idDonacion/comprobante', autenticar, autorizar('donante'), async (req, res) => {
+  const { idDonacion } = req.params;
+  if (!UUID_VALIDO.test(idDonacion)) return datosInvalidos(res, 'idDonacion tiene que ser un identificador válido');
+
+  // Se busca entre las donaciones del propio donante: una ajena da el mismo 404 que una que no existe
+  const donacion = await prisma.donacion.findFirst({
+    where: { idDonacion, donante: { idUsuario: req.usuario.id } },
+    include: {
+      donante: { include: { usuario: { select: { nombre: true, apellido: true } } } },
+      institucion: { select: { nombre: true, direccion: true } },
+    },
+  });
+  if (!donacion) return responderError(res, 404, 'NO_ENCONTRADO', 'No tenés esa donación');
+  if (donacion.resultado !== 'realizada') {
+    return responderError(res, 409, 'CONFLICTO', 'Solo hay comprobante de las donaciones realizadas');
+  }
+
+  const pdf = await generarPdfComprobante(lineasDelComprobante(donacion));
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="comprobante-donacion-${formatearFecha(donacion.fecha)}.pdf"`,
+  });
+  res.send(pdf);
 });
 
 module.exports = router;

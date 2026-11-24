@@ -3,9 +3,17 @@ import { fechaLarga, hoy, sumarDias, ESTADOS_TURNO, RESULTADOS_DONACION } from '
 import { grupoConFactor } from '../necesidades/textos'
 import { AvisoFlotante } from '../comunes/AvisoFlotante'
 import { Esqueleto } from '../comunes/Esqueleto'
+import { LectorQr } from '../carne/LectorQr'
+
+// "Donó 3 veces con DonaVida" (en la ficha del carné escaneado)
+function vecesQueDono(total) {
+  if (total === 0) return 'Es su primera donación con DonaVida'
+  return `Donó ${total} ${total === 1 ? 'vez' : 'veces'} con DonaVida`
+}
 
 // DV-11 en el front, lado del hospital: los turnos del día y qué pasó con cada uno.
 // Al marcar "Donó", la unidad entra sola al stock y el donante arranca su período de espera.
+// TAREA-18: también se puede escanear el carné del donante: aparecen su ficha y su turno de hoy, listos para registrar
 export function TurnosDelDia({ token, apiUrl }) {
   const [fecha, setFecha] = useState(hoy)
   const [turnos, setTurnos] = useState([])
@@ -17,6 +25,8 @@ export function TurnosDelDia({ token, apiUrl }) {
   // El turno que se está registrando como "Donó" (abre el detalle con el componente y el grupo)
   const [registrando, setRegistrando] = useState(null)
   const [detalle, setDetalle] = useState({ componente: 'globulos_rojos', grupoSanguineo: 'O', factorRh: 'positivo' })
+  const [lectorAbierto, setLectorAbierto] = useState(false)
+  const [ficha, setFicha] = useState(null) // el turno del carné escaneado
 
   const pedir = useCallback(async (ruta, opciones = {}) => {
     const res = await fetch(`${apiUrl}${ruta}`, {
@@ -45,6 +55,14 @@ export function TurnosDelDia({ token, apiUrl }) {
     setFecha(nuevaFecha)
   }
 
+  // TAREA-18: el lector entrega el código del QR. Si el turno no sirve (vencido, de otra institución...),
+  // el error lo muestra el lector
+  const buscarPorQr = async (codigo) => {
+    setFicha(null)
+    setRegistrando(null)
+    setFicha(await pedir(`/api/turnos/qr/${codigo}`))
+  }
+
   const registrar = async (turno, resultado, extra = {}) => {
     setOcupado(true)
     setMensaje(null)
@@ -61,6 +79,8 @@ export function TurnosDelDia({ token, apiUrl }) {
         ausente: `Quedó registrado que ${nombre} no vino (sin penalización).`,
       }[resultado])
       setRegistrando(null)
+      // Si era el carné escaneado, la ficha se cierra: el turno ya aparece registrado en la lista
+      setFicha((actual) => (actual?.idTurno === turno.idTurno ? null : actual))
       setVersion((v) => v + 1)
     } catch (err) {
       setError(err.message)
@@ -82,6 +102,99 @@ export function TurnosDelDia({ token, apiUrl }) {
   const esHoyOAntes = fecha <= hoy()
   const pendientes = turnos.filter((t) => t.estado === 'reservado').length
 
+  // La tarjeta de un turno, con lo que se puede registrar. La del carné escaneado se marca aparte
+  // (la API solo la devuelve si el turno es de hoy y está esperando, así que siempre se puede registrar)
+  const dibujarTurno = (turno, escaneado = false) => {
+    const { donante } = turno
+    const resultado = RESULTADOS_DONACION[turno.resultadoDonacion]
+    const estado = resultado ?? ESTADOS_TURNO[turno.estado]
+    const registrable = escaneado || esHoyOAntes
+    return (
+      <article
+        key={turno.idTurno}
+        className={`necesidad-tarjeta ${turno.estado === 'reservado' ? '' : 'necesidad-cerrada'} ${escaneado ? 'turno-escaneado' : ''}`}
+      >
+        {escaneado && (
+          <div className="turno-escaneado-titulo">
+            <span>📷 Carné escaneado · turno de hoy</span>
+            <button type="button" className="turno-escaneado-cerrar" onClick={() => setFicha(null)} aria-label="Cerrar la ficha">×</button>
+          </div>
+        )}
+        <div className="necesidad-cabecera">
+          <span className={`grupo-chip grupo-chip-chico ${donante.grupoSanguineo ? '' : 'grupo-chip-vacio'}`}>
+            {donante.grupoSanguineo ? grupoConFactor(donante.grupoSanguineo, donante.factorRh) : '?'}
+          </span>
+          <div className="necesidad-datos">
+            <strong>{donante.nombre} {donante.apellido}</strong>
+            <small>DNI {donante.documento} · de {turno.horaInicio} a {turno.horaFin}</small>
+            {escaneado && <small>{vecesQueDono(donante.totalDonaciones)}</small>}
+          </div>
+          <span className={`badge ${estado.clase}`}>{estado.texto}</span>
+        </div>
+
+        {turno.estado === 'reservado' && registrable && registrando !== turno.idTurno && (
+          <div className="necesidad-acciones">
+            <button type="button" className="btn btn-primary btn-chico" onClick={() => abrirRegistro(turno)} disabled={ocupado}>
+              ✓ Donó
+            </button>
+            <button type="button" className="btn btn-secondary btn-chico" onClick={() => registrar(turno, 'rechazada')} disabled={ocupado}>
+              No apto en el control
+            </button>
+            <button type="button" className="btn btn-secondary btn-chico" onClick={() => registrar(turno, 'ausente')} disabled={ocupado}>
+              No vino
+            </button>
+          </div>
+        )}
+        {turno.estado === 'reservado' && !registrable && (
+          <p className="texto-suave" style={{ margin: '0.75rem 0 0' }}>Se registra el día del turno.</p>
+        )}
+
+        {registrando === turno.idTurno && (
+          <div className="registro-donacion">
+            <div className="form-group">
+              <label htmlFor={`comp-${turno.idTurno}`}>Qué se obtuvo</label>
+              <select id={`comp-${turno.idTurno}`} name="componente" value={detalle.componente} onChange={cambiarDetalle}>
+                <option value="globulos_rojos">Glóbulos rojos (vence en 42 días)</option>
+                <option value="plaquetas">Plaquetas (vence en 5 días)</option>
+              </select>
+            </div>
+            {/* Criterio: si el grupo no estaba cargado, se completa acá */}
+            {!donante.grupoSanguineo && (
+              <div className="form-group">
+                <label>Grupo confirmado en el análisis</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select name="grupoSanguineo" value={detalle.grupoSanguineo} onChange={cambiarDetalle} aria-label="Grupo">
+                    {['O', 'A', 'B', 'AB'].map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <select name="factorRh" value={detalle.factorRh} onChange={cambiarDetalle} aria-label="Factor">
+                    <option value="positivo">+</option>
+                    <option value="negativo">−</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            <div className="necesidad-acciones" style={{ marginTop: 0 }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-chico"
+                disabled={ocupado}
+                onClick={() => registrar(turno, 'realizada', {
+                  componente: detalle.componente,
+                  ...(!donante.grupoSanguineo && { grupoSanguineo: detalle.grupoSanguineo, factorRh: detalle.factorRh }),
+                })}
+              >
+                Registrar donación
+              </button>
+              <button type="button" className="btn btn-secondary btn-chico" onClick={() => setRegistrando(null)} disabled={ocupado}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </article>
+    )
+  }
+
   return (
     <section className="card">
       <div className="card-title">
@@ -89,8 +202,22 @@ export function TurnosDelDia({ token, apiUrl }) {
           <h3 style={{ margin: 0 }}>Turnos y donaciones</h3>
           <small className="texto-suave">El día del turno, marcá qué pasó con cada persona.</small>
         </div>
-        {pendientes > 0 && <span className="badge badge-urgente">{pendientes} por registrar</span>}
+        <div className="turnos-cabecera-acciones">
+          {pendientes > 0 && <span className="badge badge-urgente">{pendientes} por registrar</span>}
+          <button
+            type="button"
+            className={`btn btn-chico ${lectorAbierto ? 'btn-secondary' : 'btn-primary'}`}
+            onClick={() => setLectorAbierto((abierto) => !abierto)}
+            aria-expanded={lectorAbierto}
+          >
+            {lectorAbierto ? 'Cerrar el lector' : '📷 Escanear carné'}
+          </button>
+        </div>
       </div>
+
+      {/* TAREA-18: el lector del carné y la ficha del donante escaneado */}
+      {lectorAbierto && <LectorQr onCodigo={buscarPorQr} />}
+      {ficha && <div className="necesidades-lista">{dibujarTurno(ficha, true)}</div>}
 
       <div className="selector-dia">
         <button type="button" className="btn btn-secondary btn-chico" onClick={() => cambiarDia(sumarDias(fecha, -1))} aria-label="Día anterior">‹</button>
@@ -110,85 +237,8 @@ export function TurnosDelDia({ token, apiUrl }) {
       )}
 
       <div className="necesidades-lista">
-        {turnos.map((turno) => {
-          const { donante } = turno
-          const resultado = RESULTADOS_DONACION[turno.resultadoDonacion]
-          const estado = resultado ?? ESTADOS_TURNO[turno.estado]
-          return (
-            <article key={turno.idTurno} className={`necesidad-tarjeta ${turno.estado === 'reservado' ? '' : 'necesidad-cerrada'}`}>
-              <div className="necesidad-cabecera">
-                <span className={`grupo-chip grupo-chip-chico ${donante.grupoSanguineo ? '' : 'grupo-chip-vacio'}`}>
-                  {donante.grupoSanguineo ? grupoConFactor(donante.grupoSanguineo, donante.factorRh) : '?'}
-                </span>
-                <div className="necesidad-datos">
-                  <strong>{donante.nombre} {donante.apellido}</strong>
-                  <small>DNI {donante.documento} · de {turno.horaInicio} a {turno.horaFin}</small>
-                </div>
-                <span className={`badge ${estado.clase}`}>{estado.texto}</span>
-              </div>
-
-              {turno.estado === 'reservado' && esHoyOAntes && registrando !== turno.idTurno && (
-                <div className="necesidad-acciones">
-                  <button type="button" className="btn btn-primary btn-chico" onClick={() => abrirRegistro(turno)} disabled={ocupado}>
-                    ✓ Donó
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-chico" onClick={() => registrar(turno, 'rechazada')} disabled={ocupado}>
-                    No apto en el control
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-chico" onClick={() => registrar(turno, 'ausente')} disabled={ocupado}>
-                    No vino
-                  </button>
-                </div>
-              )}
-              {turno.estado === 'reservado' && !esHoyOAntes && (
-                <p className="texto-suave" style={{ margin: '0.75rem 0 0' }}>Se registra el día del turno.</p>
-              )}
-
-              {registrando === turno.idTurno && (
-                <div className="registro-donacion">
-                  <div className="form-group">
-                    <label htmlFor={`comp-${turno.idTurno}`}>Qué se obtuvo</label>
-                    <select id={`comp-${turno.idTurno}`} name="componente" value={detalle.componente} onChange={cambiarDetalle}>
-                      <option value="globulos_rojos">Glóbulos rojos (vence en 42 días)</option>
-                      <option value="plaquetas">Plaquetas (vence en 5 días)</option>
-                    </select>
-                  </div>
-                  {/* Criterio: si el grupo no estaba cargado, se completa acá */}
-                  {!donante.grupoSanguineo && (
-                    <div className="form-group">
-                      <label>Grupo confirmado en el análisis</label>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <select name="grupoSanguineo" value={detalle.grupoSanguineo} onChange={cambiarDetalle} aria-label="Grupo">
-                          {['O', 'A', 'B', 'AB'].map((g) => <option key={g} value={g}>{g}</option>)}
-                        </select>
-                        <select name="factorRh" value={detalle.factorRh} onChange={cambiarDetalle} aria-label="Factor">
-                          <option value="positivo">+</option>
-                          <option value="negativo">−</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                  <div className="necesidad-acciones" style={{ marginTop: 0 }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-chico"
-                      disabled={ocupado}
-                      onClick={() => registrar(turno, 'realizada', {
-                        componente: detalle.componente,
-                        ...(!donante.grupoSanguineo && { grupoSanguineo: detalle.grupoSanguineo, factorRh: detalle.factorRh }),
-                      })}
-                    >
-                      Registrar donación
-                    </button>
-                    <button type="button" className="btn btn-secondary btn-chico" onClick={() => setRegistrando(null)} disabled={ocupado}>
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </article>
-          )
-        })}
+        {/* El turno escaneado ya está arriba: no se repite en la lista */}
+        {turnos.filter((turno) => turno.idTurno !== ficha?.idTurno).map((turno) => dibujarTurno(turno))}
       </div>
     </section>
   )
